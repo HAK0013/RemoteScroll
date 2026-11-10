@@ -38,8 +38,9 @@ class GestureAccessibilityService : AccessibilityService() {
         private const val DOUBLE_TAP_GAP_MS = 100L
 
         /** Usual position of TikTok's bookmark (Save) icon, as a fraction of the screen. */
-        private const val SAVE_ICON_X = 0.925f
-        private const val SAVE_ICON_Y = 0.755f
+        // Measured from a 1152x2560 screenshot: bookmark icon centre at (1068, 1930).
+        private const val SAVE_ICON_X = 0.927f
+        private const val SAVE_ICON_Y = 0.754f
 
         /**
          * Words in the label of TikTok's Save / Favorites button, in the languages TikTok
@@ -188,30 +189,35 @@ class GestureAccessibilityService : AccessibilityService() {
         val screen = screenSize()
         val visibleArea = Rect(0, 0, screen.x, screen.y)
         val node = appRoots().firstNotNullOfOrNull { findSaveNode(it, visibleArea) }
-        if (node == null) {
-            // Label not found: tap where TikTok puts the bookmark icon (right column,
-            // below like and comments).
-            Log.i(TAG, "Save button label not found; tapping its usual position")
+        if (node != null && clickSmallButton(node, screen)) {
+            Log.i(TAG, "Save button clicked by label")
+        } else {
+            // No usable label: tap the bookmark icon where TikTok draws it (right column,
+            // below like and comments). Not the label's bounds: they can be off.
+            Log.i(TAG, "Tapping the bookmark icon position")
             dispatch(
                 tapPath(screen.x * SAVE_ICON_X, screen.y * SAVE_ICON_Y),
                 TAP_DURATION_MS,
                 "save tap (position)"
             )
-            FeedbackSound.save()
-            return true
-        }
-
-        // Click the button, or its nearest clickable parent (the label often sits on an
-        // image inside a clickable layout).
-        var target: AccessibilityNodeInfo? = node
-        while (target != null && !target.isClickable) target = target.parent
-        if (target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) != true) {
-            // Fallback: tap the middle of the button.
-            val bounds = Rect().also { node.getBoundsInScreen(it) }
-            dispatch(tapPath(bounds.exactCenterX(), bounds.exactCenterY()), TAP_DURATION_MS, "save tap")
         }
         FeedbackSound.save()
         return true
+    }
+
+    /**
+     * Clicks [node] or its nearest clickable parent, but only if that is a small button
+     * in the right column. A large clickable parent (e.g. the whole video) would pause the
+     * video instead of saving it.
+     */
+    private fun clickSmallButton(node: AccessibilityNodeInfo, screen: Point): Boolean {
+        var target: AccessibilityNodeInfo? = node
+        while (target != null && !target.isClickable) target = target.parent
+        target ?: return false
+        val bounds = Rect().also { target.getBoundsInScreen(it) }
+        val small = bounds.width() < screen.x * 0.3f && bounds.height() < screen.y * 0.15f
+        if (!small || bounds.centerX() < screen.x / 2) return false
+        return target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
     }
 
     /** Root nodes of the app windows on screen, the focused one (TikTok) first. */
