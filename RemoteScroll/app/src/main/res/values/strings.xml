@@ -4,7 +4,12 @@
     <string name="accessibility_label">RemoteScroll gestures</string>
     <string name="accessibility_description">Lets RemoteScroll perform swipes and taps on the screen when you press buttons on your Bluetooth media remote, so you can scroll TikTok without touching the screen. RemoteScroll only reacts to the Next, Previous and Play/Pause keys and does not read screen content.</string>
 
-    <string name="instructions">1. Enable the accessibility service.\n2. Start the remote service.\n3. Open TikTok and use your Bluetooth remote:\n\n• Next: next video (swipe up)\n• Previous: previous video (swipe down)\n• Hold Next: volume up\n• Hold Previous: volume down\n• Play/Pause: tap centre (pause/resume)</string>
+    <string name="instructions">1. Enable the accessibility service.\n2. Start the remote service.\n3. Open TikTok and use your Bluetooth remote:\n\n• Next: next video (swipe up)\n• Previous: previous video (swipe down)\n• Hold Next: volume up\n• Hold Previous: volume down\n• Play/Pause: tap centre (pause/resume)
+• Hold Play/Pause: pocket lock on/off
+
+Pocket lock: the screen goes black and ignores touches, but TikTok keeps playing and your remote keeps working. Put the phone in your pocket or face down. To unlock, hold a finger on the screen for 2 seconds, or hold Play/Pause.
+
+Do not press the power button: a real lock pauses TikTok and Android blocks remote control behind the lock screen.</string>
 
     <string name="service_running">Remote service: RUNNING</string>
     <string name="service_stopped">Remote service: STOPPED</string>
@@ -20,6 +25,16 @@
     <string name="notification_title">RemoteScroll is active</string>
     <string name="notification_text">Listening for your Bluetooth remote</string>
     <string name="notification_stop">Stop</string>
+    <string name="notification_lock">Pocket lock</string>
+    <string name="notification_unlock">Unlock</string>
+
+    <string name="open_tiktok">Open TikTok</string>
+    <string name="open_tiktok_locked">Open TikTok with pocket lock</string>
+    <string name="lock_hint">🔒 Pocket lock
+
+Remote still controls TikTok
+Hold screen 2 s or hold Play/Pause to unlock</string>
+    <string name="toast_tiktok_missing">TikTok is not installed</string>
 
     <string name="toast_enable_accessibility">Enable the RemoteScroll accessibility service first</string>
     <string name="toast_notifications_denied">Notification permission denied. The service still runs, but its notification may be hidden.</string>

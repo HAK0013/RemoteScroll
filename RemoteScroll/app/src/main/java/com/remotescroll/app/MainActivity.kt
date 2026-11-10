@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.widget.Button
 import android.widget.TextView
@@ -14,6 +16,11 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 
 class MainActivity : AppCompatActivity() {
+
+    companion object {
+        /** Give TikTok time to come to the front before blacking out the screen. */
+        private const val LOCK_DELAY_MS = 1_500L
+    }
 
     private lateinit var textAccessibilityStatus: TextView
     private lateinit var textServiceStatus: TextView
@@ -49,6 +56,31 @@ class MainActivity : AppCompatActivity() {
             } else {
                 requestNotificationPermissionThenStart()
             }
+        }
+
+        findViewById<Button>(R.id.buttonOpenTikTok).setOnClickListener { openTikTok(locked = false) }
+        findViewById<Button>(R.id.buttonOpenTikTokLocked).setOnClickListener { openTikTok(locked = true) }
+    }
+
+    /**
+     * Starts the remote service (if needed) and opens TikTok. With [locked], pocket lock
+     * switches on once TikTok is in front.
+     */
+    private fun openTikTok(locked: Boolean) {
+        if (!GestureAccessibilityService.isEnabled(this)) {
+            Toast.makeText(this, R.string.toast_enable_accessibility, Toast.LENGTH_LONG).show()
+            return
+        }
+        if (!RemoteMediaService.isRunning) RemoteMediaService.start(this)
+        if (!TikTokLauncher.launch(this)) {
+            Toast.makeText(this, R.string.toast_tiktok_missing, Toast.LENGTH_LONG).show()
+            return
+        }
+        if (locked) {
+            // The accessibility service outlives this activity, so post on its side.
+            Handler(Looper.getMainLooper()).postDelayed({
+                GestureAccessibilityService.instance?.showLock()
+            }, LOCK_DELAY_MS)
         }
     }
 

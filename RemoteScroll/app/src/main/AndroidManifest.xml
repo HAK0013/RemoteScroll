@@ -14,6 +14,15 @@
         so that only the system can bind to it.
     -->
 
+    <!-- Android 11+ package visibility: lets us find and open TikTok -->
+    <queries>
+        <package android:name="com.zhiliaoapp.musically" />
+        <package android:name="com.ss.android.ugc.trill" />
+        <package android:name="com.zhiliaoapp.musically.go" />
+        <package android:name="com.ss.android.ugc.tiktok.lite" />
+        <package android:name="com.ss.android.ugc.aweme" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

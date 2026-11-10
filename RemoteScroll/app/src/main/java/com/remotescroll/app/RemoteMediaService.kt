@@ -31,10 +31,19 @@ class RemoteMediaService : Service() {
         private const val CHANNEL_ID = "remote_scroll_channel"
         private const val NOTIFICATION_ID = 1001
         private const val ACTION_STOP = "com.remotescroll.app.action.STOP"
+        private const val ACTION_TOGGLE_LOCK = "com.remotescroll.app.action.TOGGLE_LOCK"
 
         @Volatile
         var isRunning = false
             private set
+
+        @Volatile
+        private var instance: RemoteMediaService? = null
+
+        /** Redraw the notification, e.g. after pocket lock was switched on or off. */
+        fun refreshNotification(@Suppress("UNUSED_PARAMETER") context: Context) {
+            instance?.updateNotification()
+        }
 
         fun start(context: Context) {
             ContextCompat.startForegroundService(
@@ -55,6 +64,7 @@ class RemoteMediaService : Service() {
     override fun onCreate() {
         super.onCreate()
         keyHandler = MediaKeyHandler(this)
+        instance = this
         createNotificationChannel()
     }
 
@@ -62,6 +72,15 @@ class RemoteMediaService : Service() {
         if (intent?.action == ACTION_STOP) {
             stopSelf()
             return START_NOT_STICKY
+        }
+        if (intent?.action == ACTION_TOGGLE_LOCK) {
+            GestureAccessibilityService.instance?.toggleLock()
+            // Close the notification shade so the overlay (or TikTok) is visible right away.
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S) {
+                @Suppress("DEPRECATION")
+                sendBroadcast(Intent(Intent.ACTION_CLOSE_SYSTEM_DIALOGS))
+            }
+            if (isRunning) return START_STICKY
         }
 
         try {
@@ -90,6 +109,9 @@ class RemoteMediaService : Service() {
 
     override fun onDestroy() {
         isRunning = false
+        if (instance === this) instance = null
+        // Never leave the screen blacked out once the remote stops working.
+        GestureAccessibilityService.instance?.hideLock()
         silentPlayer.stop()
         mediaSession?.run {
             isActive = false
@@ -165,6 +187,11 @@ class RemoteMediaService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
+    private fun updateNotification() {
+        if (!isRunning) return
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, buildNotification())
+    }
+
     private fun buildNotification() =
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_notification)
@@ -180,6 +207,22 @@ class RemoteMediaService : Service() {
                     0,
                     Intent(this, MainActivity::class.java)
                         .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+                    PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                )
+            )
+            .addAction(
+                0,
+                getString(
+                    if (GestureAccessibilityService.instance?.isLocked == true) {
+                        R.string.notification_unlock
+                    } else {
+                        R.string.notification_lock
+                    }
+                ),
+                PendingIntent.getService(
+                    this,
+                    2,
+                    Intent(this, RemoteMediaService::class.java).setAction(ACTION_TOGGLE_LOCK),
                     PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
                 )
             )

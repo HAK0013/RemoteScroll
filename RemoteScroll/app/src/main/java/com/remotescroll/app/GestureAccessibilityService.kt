@@ -8,6 +8,8 @@ import android.content.Intent
 import android.graphics.Path
 import android.graphics.Point
 import android.hardware.display.DisplayManager
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.util.Log
 import android.view.Display
@@ -30,6 +32,11 @@ class GestureAccessibilityService : AccessibilityService() {
         private const val SWIPE_DURATION_MS = 200L
         private const val TAP_DURATION_MS = 50L
 
+        /** Time for the window manager to apply FLAG_NOT_TOUCHABLE before we inject. */
+        private const val PASS_THROUGH_SETTLE_MS = 60L
+        /** Keep the overlay see-through a moment longer so the gesture's last events land. */
+        private const val PASS_THROUGH_RESTORE_MS = 80L
+
         @Volatile
         var instance: GestureAccessibilityService? = null
             private set
@@ -46,11 +53,18 @@ class GestureAccessibilityService : AccessibilityService() {
     }
 
     private var keyHandler: MediaKeyHandler? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var lockOverlay: LockOverlay? = null
+
+    val isLocked: Boolean get() = lockOverlay?.isShowing == true
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
         keyHandler = MediaKeyHandler(this)
+        lockOverlay = LockOverlay(this).apply {
+            onUnlockedByUser = { RemoteMediaService.refreshNotification(this@GestureAccessibilityService) }
+        }
         Log.i(TAG, "Accessibility service connected")
     }
 
@@ -77,9 +91,27 @@ class GestureAccessibilityService : AccessibilityService() {
 
     private fun cleanup() {
         if (instance === this) instance = null
+        handler.removeCallbacksAndMessages(null)
+        lockOverlay?.hide()
+        lockOverlay = null
         keyHandler?.release()
         keyHandler = null
     }
+
+    // ------------------------------------------------------------- pocket lock
+
+    /** Black, touch-blocking overlay on top of TikTok. See [LockOverlay]. */
+    fun showLock() {
+        lockOverlay?.show()
+        RemoteMediaService.refreshNotification(this)
+    }
+
+    fun hideLock() {
+        lockOverlay?.hide()
+        RemoteMediaService.refreshNotification(this)
+    }
+
+    fun toggleLock() = if (isLocked) hideLock() else showLock()
 
     // ---------------------------------------------------------------- gestures
 
@@ -109,6 +141,21 @@ class GestureAccessibilityService : AccessibilityService() {
     private fun clampY(y: Float, height: Int) = y.coerceIn(1f, (height - 1).toFloat())
 
     private fun dispatch(path: Path, durationMs: Long, label: String) {
+        val overlay = lockOverlay
+        if (overlay == null || !overlay.isShowing) {
+            dispatchNow(path, durationMs, label) {}
+            return
+        }
+        // Pocket lock is on: let this gesture fall through the overlay to TikTok.
+        overlay.beginPassThrough()
+        handler.postDelayed({
+            dispatchNow(path, durationMs, label) {
+                handler.postDelayed({ overlay.endPassThrough() }, PASS_THROUGH_RESTORE_MS)
+            }
+        }, PASS_THROUGH_SETTLE_MS)
+    }
+
+    private fun dispatchNow(path: Path, durationMs: Long, label: String, onDone: () -> Unit) {
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(path, 0L, durationMs))
             .build()
@@ -116,14 +163,19 @@ class GestureAccessibilityService : AccessibilityService() {
         val accepted = dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
                 Log.d(TAG, "$label completed")
+                onDone()
             }
 
             override fun onCancelled(gestureDescription: GestureDescription?) {
                 Log.w(TAG, "$label cancelled")
+                onDone()
             }
-        }, null)
+        }, handler)
 
-        if (!accepted) Log.w(TAG, "$label rejected by the system")
+        if (!accepted) {
+            Log.w(TAG, "$label rejected by the system")
+            onDone()
+        }
     }
 
     /**

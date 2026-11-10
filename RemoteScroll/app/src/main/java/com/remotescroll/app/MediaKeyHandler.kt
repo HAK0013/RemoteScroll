@@ -17,6 +17,7 @@ import android.widget.Toast
  *  - NEXT held > 500 ms    -> media volume +1 step
  *  - PREVIOUS held > 500ms -> media volume -1 step
  *  - PLAY/PAUSE            -> tap the centre of the screen
+ *  - PLAY/PAUSE held       -> pocket lock on/off (see [LockOverlay])
  *
  * A long press fires as soon as the threshold is reached while the key is still held,
  * so the user gets feedback without having to let go. The matching ACTION_UP is then ignored.
@@ -30,11 +31,6 @@ class MediaKeyHandler(private val context: Context) {
         private const val TAG = "MediaKeyHandler"
         const val LONG_PRESS_MS = 500L
 
-        private val LONG_PRESS_KEYS = setOf(
-            KeyEvent.KEYCODE_MEDIA_NEXT,
-            KeyEvent.KEYCODE_MEDIA_PREVIOUS
-        )
-
         /** Play/pause variants: different remotes send different codes for the same button. */
         private val PLAY_PAUSE_KEYS = setOf(
             KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
@@ -43,7 +39,12 @@ class MediaKeyHandler(private val context: Context) {
             KeyEvent.KEYCODE_HEADSETHOOK
         )
 
-        val HANDLED_KEYS = LONG_PRESS_KEYS + PLAY_PAUSE_KEYS
+        private val LONG_PRESS_KEYS = setOf(
+            KeyEvent.KEYCODE_MEDIA_NEXT,
+            KeyEvent.KEYCODE_MEDIA_PREVIOUS
+        ) + PLAY_PAUSE_KEYS
+
+        val HANDLED_KEYS = LONG_PRESS_KEYS
     }
 
     private class PressState(val downTime: Long) {
@@ -133,6 +134,15 @@ class MediaKeyHandler(private val context: Context) {
     }
 
     private fun onLongPress(code: Int) {
+        if (code in PLAY_PAUSE_KEYS) {
+            val service = GestureAccessibilityService.instance
+            if (service == null) {
+                Toast.makeText(context, R.string.toast_enable_accessibility, Toast.LENGTH_SHORT).show()
+            } else {
+                service.toggleLock()
+            }
+            return
+        }
         val direction = when (code) {
             KeyEvent.KEYCODE_MEDIA_NEXT -> AudioManager.ADJUST_RAISE
             KeyEvent.KEYCODE_MEDIA_PREVIOUS -> AudioManager.ADJUST_LOWER
