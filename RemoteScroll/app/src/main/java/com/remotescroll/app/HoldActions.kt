@@ -30,6 +30,21 @@ enum class HoldAction(
         const val MIN_SECONDS = 1
         private const val KEY_STYLE = "play_style"
         private const val KEY_GAP = "press_gap_ms"
+        private const val KEY_COUNT_LOCK_HOLD = "count_lock_hold_ms"
+        const val DEFAULT_COUNT_LOCK_HOLD_MS = 1000
+        const val MIN_COUNT_LOCK_HOLD_MS = 500
+        const val MAX_COUNT_LOCK_HOLD_MS = 5000
+
+        /** Press count style: how long to hold Play/Pause for pocket lock on/off. */
+        fun countLockHoldMs(context: Context): Long =
+            prefs(context).getInt(KEY_COUNT_LOCK_HOLD, DEFAULT_COUNT_LOCK_HOLD_MS)
+                .coerceIn(MIN_COUNT_LOCK_HOLD_MS, MAX_COUNT_LOCK_HOLD_MS).toLong()
+
+        fun setCountLockHoldMs(context: Context, ms: Int) {
+            prefs(context).edit().putInt(
+                KEY_COUNT_LOCK_HOLD, ms.coerceIn(MIN_COUNT_LOCK_HOLD_MS, MAX_COUNT_LOCK_HOLD_MS)
+            ).apply()
+        }
         const val DEFAULT_GAP_MS = 1000
         const val MIN_GAP_MS = 400
         const val MAX_GAP_MS = 3000

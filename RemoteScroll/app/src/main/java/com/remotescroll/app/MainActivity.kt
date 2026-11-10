@@ -74,10 +74,8 @@ class MainActivity : AppCompatActivity() {
             setOnCheckedChangeListener { _, on ->
                 KeyLog.setUseKeyFilter(this@MainActivity, on)
                 // On that path releases arrive at a fixed delay, so holds can't be measured.
-                if (on) {
-                    HoldAction.setCountStyle(this@MainActivity, true)
-                    showStyle()
-                }
+                if (on) HoldAction.setCountStyle(this@MainActivity, true)
+                showStyle()
             }
         }
         textKeyLog = findViewById(R.id.textKeyLog)
@@ -198,7 +196,29 @@ class MainActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(bar: SeekBar) = Unit
             override fun onStopTrackingTouch(bar: SeekBar) = Unit
         })
+        setUpCountLockHold()
         showStyle()
+    }
+
+    /** Press count style: how long a Play/Pause hold must be for pocket lock (100 ms steps). */
+    private fun setUpCountLockHold() {
+        val label = findViewById<TextView>(R.id.textCountLockHold)
+        val seek = findViewById<SeekBar>(R.id.seekCountLockHold)
+        val step = 100
+        fun show(ms: Int) { label.text = getString(R.string.count_lock_label, ms / 1000f) }
+        seek.max = (HoldAction.MAX_COUNT_LOCK_HOLD_MS - HoldAction.MIN_COUNT_LOCK_HOLD_MS) / step
+        val current = HoldAction.countLockHoldMs(this).toInt()
+        seek.progress = (current - HoldAction.MIN_COUNT_LOCK_HOLD_MS) / step
+        show(current)
+        seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                val ms = HoldAction.MIN_COUNT_LOCK_HOLD_MS + progress * step
+                show(ms)
+                if (fromUser) HoldAction.setCountLockHoldMs(this@MainActivity, ms)
+            }
+            override fun onStartTrackingTouch(bar: SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: SeekBar) = Unit
+        })
     }
 
     private fun showStyle() {
@@ -214,6 +234,9 @@ class MainActivity : AppCompatActivity() {
             if (count) android.view.View.VISIBLE else android.view.View.GONE
         findViewById<android.view.View>(R.id.groupHold).visibility =
             if (count) android.view.View.GONE else android.view.View.VISIBLE
+        findViewById<TextView>(R.id.textCountLockHelp).setText(
+            if (KeyLog.useKeyFilter(this)) R.string.count_lock_help_filter else R.string.count_lock_help_ok
+        )
     }
 
     /** One slider per Play/Pause hold action, in whole seconds. */

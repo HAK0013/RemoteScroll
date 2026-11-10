@@ -190,6 +190,24 @@
                 android:layout_height="wrap_content"
                 android:text="@string/gap_help"
                 android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/textCountLockHold"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:textSize="15sp" />
+
+            <SeekBar
+                android:id="@+id/seekCountLockHold"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:id="@+id/textCountLockHelp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textSize="14sp" />
         </LinearLayout>
 
         <LinearLayout

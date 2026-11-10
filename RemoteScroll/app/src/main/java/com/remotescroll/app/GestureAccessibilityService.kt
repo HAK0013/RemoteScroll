@@ -84,7 +84,7 @@ class GestureAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        keyHandler = MediaKeyHandler(this, "key filter", swallowIgnored = false)
+        keyHandler = MediaKeyHandler(this, "key filter", swallowIgnored = false, holdsMeasurable = false)
         lockOverlay = LockOverlay(this).apply {
             onUnlockedByUser = {
                 FeedbackSound.lockOff()

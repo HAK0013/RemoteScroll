@@ -22,6 +22,8 @@ import android.widget.Toast
  *                             the button runs the last one reached.
  *    or, in Press count style: 2 presses like, 3 pocket lock, 4 save (1, 2, 3 beeps as
  *                             the presses are counted). A burst ends after a quiet gap.
+ *                             Holding Play/Pause toggles pocket lock (2 beeps), but only
+ *                             on a path where holds can be measured ([holdsMeasurable]).
  *
  * Next/Previous long presses fire as soon as the threshold is reached while the key is still
  * held, so the user gets feedback without having to let go. The matching ACTION_UP is ignored.
@@ -33,11 +35,14 @@ import android.widget.Toast
  * @param swallowIgnored what to do with a press from a remote the user did not choose:
  *   true = consume it silently (MediaSession path: otherwise the session would still
  *   act on it through its transport callbacks); false = pass it on (key filter path).
+ * @param holdsMeasurable false on the key filter path: there the release can arrive at a
+ *   fixed ~1.5 s delay whatever the real hold, so every press would look like a hold.
  */
 class MediaKeyHandler(
     private val context: Context,
     private val via: String,
-    private val swallowIgnored: Boolean
+    private val swallowIgnored: Boolean,
+    private val holdsMeasurable: Boolean = true
 ) {
 
     companion object {
@@ -74,7 +79,12 @@ class MediaKeyHandler(
 
     // Press count style
     private var pressCount = 0
-    private val finishPresses = Runnable { finishPressCount() }
+    /** The quiet gap ran out while Play/Pause was still down: finish on its release. */
+    private var finishOnRelease = false
+    private val finishPresses = Runnable {
+        // Still held: it may yet become a hold (pocket lock), so wait for the release.
+        if (presses.keys.any { it in PLAY_PAUSE_KEYS }) finishOnRelease = true else finishPressCount()
+    }
 
     fun handles(keyCode: Int): Boolean = keyCode in HANDLED_KEYS
 
@@ -102,8 +112,7 @@ class MediaKeyHandler(
     }
 
     fun release() {
-        handler.removeCallbacks(finishPresses)
-        pressCount = 0
+        resetPressCount()
         presses.values.forEach { state -> state.timers.forEach { handler.removeCallbacks(it) } }
         presses.clear()
     }
@@ -118,6 +127,18 @@ class MediaKeyHandler(
 
         if (code in PLAY_PAUSE_KEYS && HoldAction.countStyle(context)) {
             countPress()
+            if (holdsMeasurable) {
+                val runnable = Runnable {
+                    // A hold, not a press: drop the burst and toggle pocket lock.
+                    state.longFired = true
+                    resetPressCount()
+                    FeedbackSound.beeps(HoldAction.LOCK.beeps)
+                    KeyLog.note("hold: ${context.getString(HoldAction.LOCK.labelRes)} (2 beeps)")
+                    runHoldAction(HoldAction.LOCK)
+                }
+                state.timers += runnable
+                handler.postDelayed(runnable, HoldAction.countLockHoldMs(context))
+            }
             return
         }
         if (code in PLAY_PAUSE_KEYS) {
@@ -153,6 +174,11 @@ class MediaKeyHandler(
         }
         state.timers.forEach { handler.removeCallbacks(it) }
         if (counting) {
+            if (state.longFired) return // was a hold: pocket lock already toggled
+            if (finishOnRelease) {
+                finishPressCount()
+                return
+            }
             // The press was counted on DOWN. A late UP still restarts the quiet gap, so a
             // next press that the system holds back behind this UP joins the same burst.
             if (pressCount > 0) restartGap()
@@ -189,10 +215,15 @@ class MediaKeyHandler(
         handler.postDelayed(finishPresses, HoldAction.gapMs(context))
     }
 
-    private fun finishPressCount() {
+    private fun resetPressCount() {
         handler.removeCallbacks(finishPresses)
-        val count = pressCount
         pressCount = 0
+        finishOnRelease = false
+    }
+
+    private fun finishPressCount() {
+        val count = pressCount
+        resetPressCount()
         if (count == 0) return
         val action = HoldAction.forPressCount(count)
         if (action == null) onShortPress(KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE) else runHoldAction(action)
