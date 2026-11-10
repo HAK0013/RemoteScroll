@@ -32,6 +32,7 @@
     <string name="remote_test_help">With this screen open (and the remote service running), press buttons on your remote. Each press is listed here with the time since the previous one. Nothing is tapped while this screen is open.</string>
     <string name="remote_test_empty">(no presses yet)</string>
     <string name="clear_log">Clear</string>
+    <string name="footer">Created by HAK007</string>
     <string name="toast_save_not_found">Could not find the TikTok Save button</string>
     <string name="toast_tiktok_missing">TikTok is not installed</string>
 

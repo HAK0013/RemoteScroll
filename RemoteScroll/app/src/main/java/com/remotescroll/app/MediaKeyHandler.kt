@@ -24,6 +24,11 @@ import android.widget.Toast
  * A long press fires as soon as the threshold is reached while the key is still held,
  * so the user gets feedback without having to let go. The matching ACTION_UP is then ignored.
  *
+ * Play/Pause clicks are counted on ACTION_DOWN, not ACTION_UP: Bluetooth often delivers the
+ * UP late, which made fast double/triple clicks fall apart. A burst ends when no new press
+ * starts within the click window; if a key is still held then, we wait for its release
+ * (or for the hold to become a long press).
+ *
  * Used by both input paths (MediaSession in [RemoteMediaService] and key filtering in
  * [GestureAccessibilityService]). Must be called on the main thread.
  */
@@ -52,6 +57,8 @@ class MediaKeyHandler(private val context: Context, private val via: String) {
     private class PressState(val downTime: Long) {
         var longFired = false
         var longPressRunnable: Runnable? = null
+        /** Play/Pause only: this press was already counted as a click on DOWN. */
+        var counted = false
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -60,7 +67,11 @@ class MediaKeyHandler(private val context: Context, private val via: String) {
 
     /** Play/Pause clicks so far in the current burst, acted on when the burst ends. */
     private var clickCount = 0
-    private val finishClicks = Runnable { fireClicks() }
+    /** The click window ran out while Play/Pause was still held: act on its release. */
+    private var finishOnRelease = false
+    private val finishClicks = Runnable {
+        if (presses.keys.any { it in PLAY_PAUSE_KEYS }) finishOnRelease = true else fireClicks()
+    }
 
     fun handles(keyCode: Int): Boolean = keyCode in HANDLED_KEYS
 
@@ -103,6 +114,11 @@ class MediaKeyHandler(private val context: Context, private val via: String) {
             state.longPressRunnable = runnable
             handler.postDelayed(runnable, LONG_PRESS_MS)
         }
+
+        if (code in PLAY_PAUSE_KEYS) {
+            state.counted = true
+            onPlayPauseClick()
+        }
     }
 
     private fun onUp(event: KeyEvent) {
@@ -117,6 +133,12 @@ class MediaKeyHandler(private val context: Context, private val via: String) {
 
         state.longPressRunnable?.let { handler.removeCallbacks(it) }
         if (state.longFired) return
+
+        if (state.counted) {
+            // Click already counted on DOWN. Only finish a burst that was waiting for this.
+            if (finishOnRelease) fireClicks()
+            return
+        }
 
         // Events can arrive late and in a batch, so use the event timestamps.
         val heldFor = eventTime(event) - state.downTime
@@ -159,22 +181,26 @@ class MediaKeyHandler(private val context: Context, private val via: String) {
     private fun onPlayPauseClick() {
         handler.removeCallbacks(finishClicks)
         clickCount++
-        if (clickCount >= 3) fireClicks() else handler.postDelayed(finishClicks, KeyLog.clickWindowMs(context))
+        if (clickCount >= 3) {
+            // Third click: act now, even if the key is still down.
+            fireClicks()
+        } else {
+            handler.postDelayed(finishClicks, KeyLog.clickWindowMs(context))
+        }
     }
 
     private fun fireClicks() {
         val count = clickCount
         resetClicks()
-        if (KeyLog.testing) {
-            KeyLog.note(
-                when (count) {
-                    1 -> "=> 1 click: pause/resume"
-                    2 -> "=> 2 clicks: like"
-                    else -> "=> 3 clicks: save"
-                }
-            )
-            return
-        }
+        if (count == 0) return
+        KeyLog.note(
+            when (count) {
+                1 -> "=> 1 click: pause/resume"
+                2 -> "=> 2 clicks: like"
+                else -> "=> 3 clicks: save"
+            } + if (KeyLog.testing) "  (test only)" else ""
+        )
+        if (KeyLog.testing) return
         val service = GestureAccessibilityService.instance
         if (service == null) {
             Toast.makeText(context, R.string.toast_enable_accessibility, Toast.LENGTH_SHORT).show()
@@ -192,16 +218,15 @@ class MediaKeyHandler(private val context: Context, private val via: String) {
     private fun resetClicks() {
         handler.removeCallbacks(finishClicks)
         clickCount = 0
+        finishOnRelease = false
     }
 
     private fun onLongPress(code: Int) {
         if (code in PLAY_PAUSE_KEYS) {
-            // A hold right after a click: drop the pending clicks.
+            // A hold: its own DOWN was counted as a click, so drop the burst.
             resetClicks()
-            if (KeyLog.testing) {
-                KeyLog.note("=> hold: pocket lock on/off")
-                return
-            }
+            KeyLog.note("=> hold: pocket lock on/off" + if (KeyLog.testing) "  (test only)" else "")
+            if (KeyLog.testing) return
             val service = GestureAccessibilityService.instance
             if (service == null) {
                 Toast.makeText(context, R.string.toast_enable_accessibility, Toast.LENGTH_SHORT).show()

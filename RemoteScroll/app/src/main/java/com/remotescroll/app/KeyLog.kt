@@ -18,7 +18,7 @@ object KeyLog {
     private const val MAX_LINES = 30
     private const val PREFS = "remote_scroll"
     private const val KEY_CLICK_WINDOW = "click_window_ms"
-    const val DEFAULT_CLICK_WINDOW_MS = 500
+    const val DEFAULT_CLICK_WINDOW_MS = 800
     const val MIN_CLICK_WINDOW_MS = 250
     const val MAX_CLICK_WINDOW_MS = 1500
 

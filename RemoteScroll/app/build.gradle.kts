@@ -11,8 +11,8 @@ android {
         applicationId = "com.remotescroll.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 5
-        versionName = "1.4"
+        versionCode = 6
+        versionName = "1.5"
     }
 
     // APK file name carries the version, e.g. RemoteScroll-v1.1.apk
