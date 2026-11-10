@@ -67,7 +67,7 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.buttonOpenTikTok).setOnClickListener { openTikTok(locked = false) }
         findViewById<Button>(R.id.buttonOpenTikTokLocked).setOnClickListener { openTikTok(locked = true) }
 
-        setUpClickWindow()
+        setUpHoldTimes()
         findViewById<CheckBox>(R.id.checkKeyFilter).apply {
             isChecked = KeyLog.useKeyFilter(this@MainActivity)
             setOnCheckedChangeListener { _, on -> KeyLog.setUseKeyFilter(this@MainActivity, on) }
@@ -167,22 +167,31 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var textKeyLog: TextView
 
-    /** Slider for the multi-click wait, in 50 ms steps. */
-    private fun setUpClickWindow() {
-        val label = findViewById<TextView>(R.id.textClickWindow)
-        val seek = findViewById<SeekBar>(R.id.seekClickWindow)
-        val step = 50
-        fun show(ms: Int) { label.text = getString(R.string.click_window_label, ms / 1000f) }
+    /** One slider per Play/Pause hold action, in whole seconds. */
+    private fun setUpHoldTimes() {
+        bindHoldSlider(HoldAction.LIKE, R.id.textHoldLike, R.id.seekHoldLike)
+        bindHoldSlider(HoldAction.LOCK, R.id.textHoldLock, R.id.seekHoldLock)
+        bindHoldSlider(HoldAction.SAVE, R.id.textHoldSave, R.id.seekHoldSave)
+    }
 
-        seek.max = (KeyLog.MAX_CLICK_WINDOW_MS - KeyLog.MIN_CLICK_WINDOW_MS) / step
-        val current = KeyLog.clickWindowMs(this).toInt()
-        seek.progress = (current - KeyLog.MIN_CLICK_WINDOW_MS) / step
+    private fun bindHoldSlider(action: HoldAction, labelId: Int, seekId: Int) {
+        val label = findViewById<TextView>(labelId)
+        val seek = findViewById<SeekBar>(seekId)
+        fun show(seconds: Int) {
+            label.text = getString(
+                if (action.beeps == 1) R.string.hold_row else R.string.hold_row_plural,
+                getString(action.labelRes), seconds, action.beeps
+            )
+        }
+        seek.max = HoldAction.MAX_SECONDS - HoldAction.MIN_SECONDS
+        val current = action.seconds(this)
+        seek.progress = current - HoldAction.MIN_SECONDS
         show(current)
         seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
-                val ms = KeyLog.MIN_CLICK_WINDOW_MS + progress * step
-                show(ms)
-                if (fromUser) KeyLog.setClickWindowMs(this@MainActivity, ms)
+                val seconds = HoldAction.MIN_SECONDS + progress
+                show(seconds)
+                if (fromUser) action.setSeconds(this@MainActivity, seconds)
             }
             override fun onStartTrackingTouch(bar: SeekBar) = Unit
             override fun onStopTrackingTouch(bar: SeekBar) = Unit

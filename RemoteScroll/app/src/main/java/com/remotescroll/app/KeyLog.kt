@@ -17,11 +17,7 @@ object KeyLog {
 
     private const val MAX_LINES = 30
     private const val PREFS = "remote_scroll"
-    private const val KEY_CLICK_WINDOW = "click_window_ms"
     private const val KEY_USE_FILTER = "use_key_filter"
-    const val DEFAULT_CLICK_WINDOW_MS = 800
-    const val MIN_CLICK_WINDOW_MS = 250
-    const val MAX_CLICK_WINDOW_MS = 1500
 
     var testing = false
 
@@ -59,12 +55,7 @@ object KeyLog {
         listener?.invoke()
     }
 
-    // ------------------------------------------------------------ click window setting
-
-    /** How long to wait for another Play/Pause click before acting (1, 2 or 3 clicks). */
-    fun clickWindowMs(context: Context): Long =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
-            .getInt(KEY_CLICK_WINDOW, DEFAULT_CLICK_WINDOW_MS).toLong()
+    // ------------------------------------------------------------ settings
 
     /**
      * Take media keys in the accessibility key filter (old behaviour) instead of letting
@@ -78,9 +69,4 @@ object KeyLog {
             .putBoolean(KEY_USE_FILTER, on).apply()
     }
 
-    fun setClickWindowMs(context: Context, ms: Int) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
-            .putInt(KEY_CLICK_WINDOW, ms.coerceIn(MIN_CLICK_WINDOW_MS, MAX_CLICK_WINDOW_MS))
-            .apply()
-    }
 }

@@ -2,9 +2,9 @@
 <resources>
     <string name="app_name">RemoteScroll</string>
     <string name="accessibility_label">RemoteScroll gestures</string>
-    <string name="accessibility_description">Lets RemoteScroll perform swipes and taps on the screen when you press buttons on your Bluetooth media remote, so you can scroll TikTok without touching the screen. RemoteScroll only reacts to the Next, Previous and Play/Pause keys. It reads the screen only when you triple-click Play/Pause, to find the TikTok Save button, and never stores or sends anything.</string>
+    <string name="accessibility_description">Lets RemoteScroll perform swipes and taps on the screen when you press buttons on your Bluetooth media remote, so you can scroll TikTok without touching the screen. RemoteScroll only reacts to the Next, Previous and Play/Pause keys. It reads the screen only when you ask it to save a video, to find the TikTok Save button, and never stores or sends anything.</string>
 
-    <string name="instructions">1. Enable the accessibility service.\n2. Start the remote service.\n3. Open TikTok and use your Bluetooth remote:\n\n• Next: next video (swipe up)\n• Previous: previous video (swipe down)\n• Hold Next: volume up\n• Hold Previous: volume down\n• Play/Pause: tap centre (pause/resume)\n• Play/Pause twice: like the video\n• Play/Pause 3 times: save to Favorites\n• Hold Play/Pause: pocket lock on/off\n\nPocket lock: the screen goes black and ignores touches, but TikTok keeps playing and your remote keeps working. Put the phone in your pocket or face down. To unlock, hold a finger on the screen for 2 seconds, or hold Play/Pause.\n\nDo not press the power button: a real lock pauses TikTok and Android blocks remote control behind the lock screen.</string>
+    <string name="instructions">1. Enable the accessibility service.\n2. Start the remote service.\n3. Open TikTok and use your Bluetooth remote:\n\n• Next: next video (swipe up)\n• Previous: previous video (swipe down)\n• Hold Next: volume up\n• Hold Previous: volume down\n• Play/Pause: pause/resume\n• Hold Play/Pause: 1 beep = like, 2 beeps = pocket lock on/off, 3 beeps = save. Let go after the beeps you want.\n\nPocket lock: the screen goes black and ignores touches, but TikTok keeps playing and your remote keeps working. Put the phone in your pocket or face down. To unlock, hold a finger on the screen for 2 seconds, or hold Play/Pause until 2 beeps.\n\nDo not press the power button: a real lock pauses TikTok and Android blocks remote control behind the lock screen.</string>
 
     <string name="service_running">Remote service: RUNNING</string>
     <string name="service_stopped">Remote service: STOPPED</string>
@@ -25,7 +25,7 @@
 
     <string name="open_tiktok">Open TikTok</string>
     <string name="open_tiktok_locked">Open TikTok with pocket lock</string>
-    <string name="lock_hint">🔒 Pocket lock\n\nRemote still controls TikTok\nHold screen 2 s or hold Play/Pause to unlock</string>
+    <string name="lock_hint">🔒 Pocket lock\n\nRemote still controls TikTok\nHold screen 2 s, or hold Play/Pause\nuntil 2 beeps, to unlock</string>
     <string name="sleep_title">Sleep timer</string>
     <string name="sleep_off">Off</string>
     <string name="sleep_30">30 min</string>
@@ -44,10 +44,15 @@
     <string name="remotes_dialog_all">Allow all</string>
     <string name="remotes_none_paired">No paired Bluetooth devices found. Pair your remote in Bluetooth settings first.</string>
     <string name="remotes_permission_denied">RemoteScroll needs the Nearby devices permission to list your Bluetooth devices.</string>
-    <string name="click_window_label">Multi-click wait: %1$.2f s</string>
-    <string name="click_window_help">How long to wait for another Play/Pause press before acting. Longer makes 2 and 3 clicks easier on slow Bluetooth remotes, but 1 click (pause) waits that long too.</string>
     <string name="key_filter_label">Catch keys early (old way)</string>
     <string name="key_filter_help">Leave this off. Turn it on only if your remote does nothing with it off. On some phones it delays every press, which stops 2 and 3 clicks from working.</string>
+    <string name="hold_title">Play/Pause hold times</string>
+    <string name="hold_help">Hold Play/Pause and listen: 1 beep, 2 beeps, 3 beeps. Let go after the beeps you want. A short press pauses.</string>
+    <string name="hold_like">Like</string>
+    <string name="hold_lock">Pocket lock on/off</string>
+    <string name="hold_save">Save to Favorites</string>
+    <string name="hold_row">%1$s: hold %2$d s (%3$d beep)</string>
+    <string name="hold_row_plural">%1$s: hold %2$d s (%3$d beeps)</string>
     <string name="remote_test_title">Remote test</string>
     <string name="remote_test_help">With this screen open (and the remote service running), press buttons on your remote. Each press is listed here with the time since the previous one. Nothing is tapped while this screen is open.</string>
     <string name="remote_test_empty">(no presses yet)</string>

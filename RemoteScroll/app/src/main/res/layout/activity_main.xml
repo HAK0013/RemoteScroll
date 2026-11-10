@@ -134,25 +134,55 @@
             android:text="@string/remotes_choose" />
 
         <TextView
-            android:id="@+id/textClickWindow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="32dp"
+            android:text="@string/hold_title"
             android:textSize="16sp"
             android:textStyle="bold" />
-
-        <SeekBar
-            android:id="@+id/seekClickWindow"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="@string/click_window_help"
+            android:text="@string/hold_help"
             android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/textHoldLike"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:textSize="15sp" />
+
+        <SeekBar
+            android:id="@+id/seekHoldLike"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:id="@+id/textHoldLock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textSize="15sp" />
+
+        <SeekBar
+            android:id="@+id/seekHoldLock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+
+        <TextView
+            android:id="@+id/textHoldSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textSize="15sp" />
+
+        <SeekBar
+            android:id="@+id/seekHoldSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
 
         <CheckBox
             android:id="@+id/checkKeyFilter"

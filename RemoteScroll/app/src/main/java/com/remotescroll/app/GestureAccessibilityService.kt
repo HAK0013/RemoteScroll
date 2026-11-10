@@ -189,7 +189,6 @@ class GestureAccessibilityService : AccessibilityService() {
             )
             .build()
         dispatch(gesture, "double tap")
-        FeedbackSound.like()
     }
 
     /**
@@ -216,7 +215,6 @@ class GestureAccessibilityService : AccessibilityService() {
                 "save tap (position)"
             )
         }
-        FeedbackSound.save()
         return true
     }
 
