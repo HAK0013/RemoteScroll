@@ -81,7 +81,10 @@ class GestureAccessibilityService : AccessibilityService() {
         instance = this
         keyHandler = MediaKeyHandler(this)
         lockOverlay = LockOverlay(this).apply {
-            onUnlockedByUser = { RemoteMediaService.refreshNotification(this@GestureAccessibilityService) }
+            onUnlockedByUser = {
+                FeedbackSound.lockOff()
+                RemoteMediaService.refreshNotification(this@GestureAccessibilityService)
+            }
         }
         Log.i(TAG, "Accessibility service connected")
     }
@@ -120,12 +123,18 @@ class GestureAccessibilityService : AccessibilityService() {
 
     /** Black, touch-blocking overlay on top of TikTok. See [LockOverlay]. */
     fun showLock() {
-        lockOverlay?.show()
+        val overlay = lockOverlay ?: return
+        if (overlay.isShowing) return
+        overlay.show()
+        if (overlay.isShowing) FeedbackSound.lockOn()
         RemoteMediaService.refreshNotification(this)
     }
 
     fun hideLock() {
-        lockOverlay?.hide()
+        val overlay = lockOverlay ?: return
+        if (!overlay.isShowing) return
+        overlay.hide()
+        FeedbackSound.lockOff()
         RemoteMediaService.refreshNotification(this)
     }
 
@@ -160,6 +169,7 @@ class GestureAccessibilityService : AccessibilityService() {
             )
             .build()
         dispatch(gesture, "double tap")
+        FeedbackSound.like()
     }
 
     /**
@@ -180,11 +190,12 @@ class GestureAccessibilityService : AccessibilityService() {
         // image inside a clickable layout).
         var target: AccessibilityNodeInfo? = node
         while (target != null && !target.isClickable) target = target.parent
-        if (target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true
-
-        // Fallback: tap the middle of the button.
-        val bounds = Rect().also { node.getBoundsInScreen(it) }
-        dispatch(tapPath(bounds.exactCenterX(), bounds.exactCenterY()), TAP_DURATION_MS, "save tap")
+        if (target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) != true) {
+            // Fallback: tap the middle of the button.
+            val bounds = Rect().also { node.getBoundsInScreen(it) }
+            dispatch(tapPath(bounds.exactCenterX(), bounds.exactCenterY()), TAP_DURATION_MS, "save tap")
+        }
+        FeedbackSound.save()
         return true
     }
 
