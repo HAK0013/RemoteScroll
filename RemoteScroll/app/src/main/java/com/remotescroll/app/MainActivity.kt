@@ -197,12 +197,35 @@ class MainActivity : AppCompatActivity() {
         showStyle()
     }
 
-    /** Press count style: how long a Play/Pause hold must be for pocket lock (100 ms steps). */
+    /**
+     * Press count style: what a Play/Pause hold does (pocket lock, like or save) and how
+     * long it must be (100 ms steps).
+     */
     private fun setUpCountLockHold() {
         val label = findViewById<TextView>(R.id.textCountLockHold)
         val seek = findViewById<SeekBar>(R.id.seekCountLockHold)
         val step = 100
-        fun show(ms: Int) { label.text = getString(R.string.count_lock_label, ms / 1000f) }
+        fun show(ms: Int) {
+            val beeps = HoldAction.countHoldAction(this).beeps
+            label.text = getString(
+                if (beeps == 1) R.string.count_lock_label else R.string.count_lock_label_plural,
+                ms / 1000f, beeps
+            )
+        }
+
+        val actionIds = mapOf(
+            R.id.countHoldLock to HoldAction.LOCK,
+            R.id.countHoldLike to HoldAction.LIKE,
+            R.id.countHoldSave to HoldAction.SAVE
+        )
+        val radio = findViewById<RadioGroup>(R.id.radioCountHold)
+        val chosen = HoldAction.countHoldAction(this)
+        radio.check(actionIds.entries.first { it.value == chosen }.key)
+        radio.setOnCheckedChangeListener { _, id ->
+            actionIds[id]?.let { HoldAction.setCountHoldAction(this, it) }
+            show(HoldAction.countLockHoldMs(this).toInt()) // beep count follows the action
+        }
+
         seek.max = (HoldAction.MAX_COUNT_LOCK_HOLD_MS - HoldAction.MIN_COUNT_LOCK_HOLD_MS) / step
         val current = HoldAction.countLockHoldMs(this).toInt()
         seek.progress = (current - HoldAction.MIN_COUNT_LOCK_HOLD_MS) / step

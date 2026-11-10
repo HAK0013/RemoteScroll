@@ -22,7 +22,8 @@ import android.widget.Toast
  *                             the button runs the last one reached.
  *    or, in Press count style: 2 presses like, 3 pocket lock, 4 save (1, 2, 3 beeps as
  *                             the presses are counted). A burst ends after a quiet gap.
- *                             Holding Play/Pause toggles pocket lock (2 beeps). Some
+ *                             Holding Play/Pause runs a chosen action (default pocket
+ *                             lock; beeps as for that action). Some
  *                             remotes end every hold at about 1.5 s, so keep it shorter.
  *
  * Next/Previous long presses fire as soon as the threshold is reached while the key is still
@@ -125,12 +126,13 @@ class MediaKeyHandler(
         if (code in PLAY_PAUSE_KEYS && HoldAction.countStyle(context)) {
             countPress()
             val runnable = Runnable {
-                // A hold, not a press: drop the burst and toggle pocket lock.
+                // A hold, not a press: drop the burst and run the chosen hold action.
                 state.longFired = true
                 resetPressCount()
-                FeedbackSound.beeps(HoldAction.LOCK.beeps)
-                KeyLog.note("hold: ${context.getString(HoldAction.LOCK.labelRes)} (2 beeps)")
-                runHoldAction(HoldAction.LOCK)
+                val action = HoldAction.countHoldAction(context)
+                FeedbackSound.beeps(action.beeps)
+                KeyLog.note("hold: ${context.getString(action.labelRes)} (${action.beeps} beep)")
+                runHoldAction(action)
             }
             state.timers += runnable
             handler.postDelayed(runnable, HoldAction.countLockHoldMs(context))
