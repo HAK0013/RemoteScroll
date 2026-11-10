@@ -27,13 +27,11 @@ import android.widget.Toast
  * Used by both input paths (MediaSession in [RemoteMediaService] and key filtering in
  * [GestureAccessibilityService]). Must be called on the main thread.
  */
-class MediaKeyHandler(private val context: Context) {
+class MediaKeyHandler(private val context: Context, private val via: String) {
 
     companion object {
         private const val TAG = "MediaKeyHandler"
         const val LONG_PRESS_MS = 500L
-        /** Each further Play/Pause press within this window adds to the click count. */
-        const val DOUBLE_CLICK_MS = 350L
 
         /** Play/pause variants: different remotes send different codes for the same button. */
         private val PLAY_PAUSE_KEYS = setOf(
@@ -69,6 +67,7 @@ class MediaKeyHandler(private val context: Context) {
     /** @return true if the event was consumed. */
     fun onKeyEvent(event: KeyEvent): Boolean {
         if (!handles(event.keyCode)) return false
+        KeyLog.key(event, via)
         when (event.action) {
             KeyEvent.ACTION_DOWN -> onDown(event)
             KeyEvent.ACTION_UP -> onUp(event)
@@ -77,7 +76,10 @@ class MediaKeyHandler(private val context: Context) {
     }
 
     /** Short-press entry point for transport-control callbacks that have no DOWN/UP pair. */
-    fun performShortPress(keyCode: Int) = onShortPress(keyCode)
+    fun performShortPress(keyCode: Int) {
+        KeyLog.note("${KeyEvent.keyCodeToString(keyCode).removePrefix("KEYCODE_")} (transport control)  [$via]")
+        onShortPress(keyCode)
+    }
 
     fun release() {
         resetClicks()
@@ -129,6 +131,14 @@ class MediaKeyHandler(private val context: Context) {
         if (event.eventTime > 0) event.eventTime else SystemClock.uptimeMillis()
 
     private fun onShortPress(code: Int) {
+        if (code in PLAY_PAUSE_KEYS) {
+            onPlayPauseClick()
+            return
+        }
+        if (KeyLog.testing) {
+            KeyLog.note(if (code == KeyEvent.KEYCODE_MEDIA_NEXT) "=> next video" else "=> previous video")
+            return
+        }
         val service = GestureAccessibilityService.instance
         if (service == null) {
             Log.w(TAG, "Accessibility service not connected; cannot dispatch gesture")
@@ -138,25 +148,38 @@ class MediaKeyHandler(private val context: Context) {
         when (code) {
             KeyEvent.KEYCODE_MEDIA_NEXT -> service.swipeUp()
             KeyEvent.KEYCODE_MEDIA_PREVIOUS -> service.swipeDown()
-            in PLAY_PAUSE_KEYS -> onPlayPauseClick()
         }
     }
 
     /**
-     * Counts clicks that come within [DOUBLE_CLICK_MS] of each other:
+     * Counts clicks that come within the click window (a setting, see [KeyLog]) of each other:
      * 1 = pause/resume, 2 = like, 3 = save. One and two clicks wait out that window,
      * because another click might still follow; the third click acts at once.
      */
     private fun onPlayPauseClick() {
         handler.removeCallbacks(finishClicks)
         clickCount++
-        if (clickCount >= 3) fireClicks() else handler.postDelayed(finishClicks, DOUBLE_CLICK_MS)
+        if (clickCount >= 3) fireClicks() else handler.postDelayed(finishClicks, KeyLog.clickWindowMs(context))
     }
 
     private fun fireClicks() {
         val count = clickCount
         resetClicks()
-        val service = GestureAccessibilityService.instance ?: return
+        if (KeyLog.testing) {
+            KeyLog.note(
+                when (count) {
+                    1 -> "=> 1 click: pause/resume"
+                    2 -> "=> 2 clicks: like"
+                    else -> "=> 3 clicks: save"
+                }
+            )
+            return
+        }
+        val service = GestureAccessibilityService.instance
+        if (service == null) {
+            Toast.makeText(context, R.string.toast_enable_accessibility, Toast.LENGTH_SHORT).show()
+            return
+        }
         when (count) {
             1 -> service.tapCenter()
             2 -> service.doubleTapCenter()
@@ -175,6 +198,10 @@ class MediaKeyHandler(private val context: Context) {
         if (code in PLAY_PAUSE_KEYS) {
             // A hold right after a click: drop the pending clicks.
             resetClicks()
+            if (KeyLog.testing) {
+                KeyLog.note("=> hold: pocket lock on/off")
+                return
+            }
             val service = GestureAccessibilityService.instance
             if (service == null) {
                 Toast.makeText(context, R.string.toast_enable_accessibility, Toast.LENGTH_SHORT).show()
@@ -187,6 +214,10 @@ class MediaKeyHandler(private val context: Context) {
             KeyEvent.KEYCODE_MEDIA_NEXT -> AudioManager.ADJUST_RAISE
             KeyEvent.KEYCODE_MEDIA_PREVIOUS -> AudioManager.ADJUST_LOWER
             else -> return
+        }
+        if (KeyLog.testing) {
+            KeyLog.note(if (direction == AudioManager.ADJUST_RAISE) "=> hold: volume up" else "=> hold: volume down")
+            return
         }
         audioManager.adjustStreamVolume(
             AudioManager.STREAM_MUSIC,

@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.widget.Button
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -60,6 +61,46 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.buttonOpenTikTok).setOnClickListener { openTikTok(locked = false) }
         findViewById<Button>(R.id.buttonOpenTikTokLocked).setOnClickListener { openTikTok(locked = true) }
+
+        setUpClickWindow()
+        textKeyLog = findViewById(R.id.textKeyLog)
+        findViewById<Button>(R.id.buttonClearLog).setOnClickListener { KeyLog.clear() }
+    }
+
+    private lateinit var textKeyLog: TextView
+
+    /** Slider for the multi-click wait, in 50 ms steps. */
+    private fun setUpClickWindow() {
+        val label = findViewById<TextView>(R.id.textClickWindow)
+        val seek = findViewById<SeekBar>(R.id.seekClickWindow)
+        val step = 50
+        fun show(ms: Int) { label.text = getString(R.string.click_window_label, ms / 1000f) }
+
+        seek.max = (KeyLog.MAX_CLICK_WINDOW_MS - KeyLog.MIN_CLICK_WINDOW_MS) / step
+        val current = KeyLog.clickWindowMs(this).toInt()
+        seek.progress = (current - KeyLog.MIN_CLICK_WINDOW_MS) / step
+        show(current)
+        seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                val ms = KeyLog.MIN_CLICK_WINDOW_MS + progress * step
+                show(ms)
+                if (fromUser) KeyLog.setClickWindowMs(this@MainActivity, ms)
+            }
+            override fun onStartTrackingTouch(bar: SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: SeekBar) = Unit
+        })
+    }
+
+    private fun showKeyLog() {
+        val text = KeyLog.text()
+        textKeyLog.text = text.ifEmpty { getString(R.string.remote_test_empty) }
+    }
+
+    override fun onPause() {
+        // Back in TikTok (or anywhere else): remote presses act again.
+        KeyLog.testing = false
+        KeyLog.listener = null
+        super.onPause()
     }
 
     /**
@@ -87,6 +128,10 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshStatus()
+        // Remote test: while this screen is open, presses are only logged.
+        KeyLog.testing = true
+        KeyLog.listener = { showKeyLog() }
+        showKeyLog()
     }
 
     private fun requestNotificationPermissionThenStart() {

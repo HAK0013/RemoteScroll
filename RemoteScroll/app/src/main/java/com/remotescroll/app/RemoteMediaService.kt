@@ -63,7 +63,7 @@ class RemoteMediaService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        keyHandler = MediaKeyHandler(this)
+        keyHandler = MediaKeyHandler(this, "media session")
         instance = this
         createNotificationChannel()
     }

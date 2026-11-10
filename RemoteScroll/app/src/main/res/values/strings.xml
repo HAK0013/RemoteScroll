@@ -26,6 +26,12 @@
     <string name="open_tiktok">Open TikTok</string>
     <string name="open_tiktok_locked">Open TikTok with pocket lock</string>
     <string name="lock_hint">🔒 Pocket lock\n\nRemote still controls TikTok\nHold screen 2 s or hold Play/Pause to unlock</string>
+    <string name="click_window_label">Multi-click wait: %1$.2f s</string>
+    <string name="click_window_help">How long to wait for another Play/Pause press before acting. Longer makes 2 and 3 clicks easier on slow Bluetooth remotes, but 1 click (pause) waits that long too.</string>
+    <string name="remote_test_title">Remote test</string>
+    <string name="remote_test_help">With this screen open (and the remote service running), press buttons on your remote. Each press is listed here with the time since the previous one. Nothing is tapped while this screen is open.</string>
+    <string name="remote_test_empty">(no presses yet)</string>
+    <string name="clear_log">Clear</string>
     <string name="toast_save_not_found">Could not find the TikTok Save button</string>
     <string name="toast_tiktok_missing">TikTok is not installed</string>
 
