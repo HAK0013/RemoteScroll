@@ -137,6 +137,71 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="32dp"
+            android:text="@string/style_title"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <RadioGroup
+            android:id="@+id/radioStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp">
+
+            <RadioButton
+                android:id="@+id/styleHold"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/style_hold" />
+
+            <RadioButton
+                android:id="@+id/styleCount"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/style_count" />
+        </RadioGroup>
+
+        <LinearLayout
+            android:id="@+id/groupCount"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/count_help"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/textGap"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:textSize="15sp" />
+
+            <SeekBar
+                android:id="@+id/seekGap"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/gap_help"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/groupHold"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:text="@string/hold_title"
             android:textSize="16sp"
             android:textStyle="bold" />
@@ -183,6 +248,7 @@
             android:id="@+id/seekHoldSave"
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
+        </LinearLayout>
 
         <CheckBox
             android:id="@+id/checkKeyFilter"

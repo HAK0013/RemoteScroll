@@ -28,6 +28,41 @@ enum class HoldAction(
 
     companion object {
         const val MIN_SECONDS = 1
+        private const val KEY_STYLE = "play_style"
+        private const val KEY_GAP = "press_gap_ms"
+        const val DEFAULT_GAP_MS = 1000
+        const val MIN_GAP_MS = 400
+        const val MAX_GAP_MS = 3000
+
+        /**
+         * true = Press count style (2 presses like, 3 lock, 4 save); false = Hold style.
+         * Press count is for remotes whose release arrives at a fixed delay (seen with the
+         * key filter path), which makes hold length impossible to measure.
+         */
+        fun countStyle(context: Context): Boolean =
+            // Until the user picks, follow the key filter setting (holds don't work there).
+            prefs(context).getBoolean(KEY_STYLE, KeyLog.useKeyFilter(context))
+
+        fun setCountStyle(context: Context, on: Boolean) {
+            prefs(context).edit().putBoolean(KEY_STYLE, on).apply()
+        }
+
+        /** Press count style: quiet time after the last signal that ends a burst of presses. */
+        fun gapMs(context: Context): Long =
+            prefs(context).getInt(KEY_GAP, DEFAULT_GAP_MS).coerceIn(MIN_GAP_MS, MAX_GAP_MS).toLong()
+
+        fun setGapMs(context: Context, ms: Int) {
+            prefs(context).edit().putInt(KEY_GAP, ms.coerceIn(MIN_GAP_MS, MAX_GAP_MS)).apply()
+        }
+
+        /** Press count style: action for [presses] presses (1 = pause, so null). */
+        fun forPressCount(presses: Int): HoldAction? = when {
+            presses <= 1 -> null
+            presses == 2 -> LIKE
+            presses == 3 -> LOCK
+            else -> SAVE
+        }
+
         const val MAX_SECONDS = 15
 
         private fun prefs(context: Context) =

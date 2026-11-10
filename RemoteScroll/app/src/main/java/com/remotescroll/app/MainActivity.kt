@@ -68,9 +68,17 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.buttonOpenTikTokLocked).setOnClickListener { openTikTok(locked = true) }
 
         setUpHoldTimes()
+        setUpStyle()
         findViewById<CheckBox>(R.id.checkKeyFilter).apply {
             isChecked = KeyLog.useKeyFilter(this@MainActivity)
-            setOnCheckedChangeListener { _, on -> KeyLog.setUseKeyFilter(this@MainActivity, on) }
+            setOnCheckedChangeListener { _, on ->
+                KeyLog.setUseKeyFilter(this@MainActivity, on)
+                // On that path releases arrive at a fixed delay, so holds can't be measured.
+                if (on) {
+                    HoldAction.setCountStyle(this@MainActivity, true)
+                    showStyle()
+                }
+            }
         }
         textKeyLog = findViewById(R.id.textKeyLog)
         findViewById<Button>(R.id.buttonClearLog).setOnClickListener { KeyLog.clear() }
@@ -166,6 +174,47 @@ class MainActivity : AppCompatActivity() {
     }
 
     private lateinit var textKeyLog: TextView
+
+    /** Hold vs Press count, plus the Press count quiet-gap slider (100 ms steps). */
+    private fun setUpStyle() {
+        findViewById<RadioGroup>(R.id.radioStyle).setOnCheckedChangeListener { _, id ->
+            HoldAction.setCountStyle(this, id == R.id.styleCount)
+            showStyleGroups()
+        }
+        val label = findViewById<TextView>(R.id.textGap)
+        val seek = findViewById<SeekBar>(R.id.seekGap)
+        val step = 100
+        fun show(ms: Int) { label.text = getString(R.string.gap_label, ms / 1000f) }
+        seek.max = (HoldAction.MAX_GAP_MS - HoldAction.MIN_GAP_MS) / step
+        val current = HoldAction.gapMs(this).toInt()
+        seek.progress = (current - HoldAction.MIN_GAP_MS) / step
+        show(current)
+        seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                val ms = HoldAction.MIN_GAP_MS + progress * step
+                show(ms)
+                if (fromUser) HoldAction.setGapMs(this@MainActivity, ms)
+            }
+            override fun onStartTrackingTouch(bar: SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: SeekBar) = Unit
+        })
+        showStyle()
+    }
+
+    private fun showStyle() {
+        findViewById<RadioGroup>(R.id.radioStyle).check(
+            if (HoldAction.countStyle(this)) R.id.styleCount else R.id.styleHold
+        )
+        showStyleGroups()
+    }
+
+    private fun showStyleGroups() {
+        val count = HoldAction.countStyle(this)
+        findViewById<android.view.View>(R.id.groupCount).visibility =
+            if (count) android.view.View.VISIBLE else android.view.View.GONE
+        findViewById<android.view.View>(R.id.groupHold).visibility =
+            if (count) android.view.View.GONE else android.view.View.VISIBLE
+    }
 
     /** One slider per Play/Pause hold action, in whole seconds. */
     private fun setUpHoldTimes() {
