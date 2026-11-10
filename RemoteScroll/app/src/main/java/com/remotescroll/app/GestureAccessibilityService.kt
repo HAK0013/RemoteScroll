@@ -37,6 +37,10 @@ class GestureAccessibilityService : AccessibilityService() {
         /** Gap between the two taps of a double tap (TikTok's "like"). */
         private const val DOUBLE_TAP_GAP_MS = 100L
 
+        /** Usual position of TikTok's bookmark (Save) icon, as a fraction of the screen. */
+        private const val SAVE_ICON_X = 0.925f
+        private const val SAVE_ICON_Y = 0.755f
+
         /**
          * Words in the label of TikTok's Save / Favorites button, in the languages TikTok
          * is most used in around here. Lower case.
@@ -184,7 +188,18 @@ class GestureAccessibilityService : AccessibilityService() {
         val screen = screenSize()
         val visibleArea = Rect(0, 0, screen.x, screen.y)
         val node = appRoots().firstNotNullOfOrNull { findSaveNode(it, visibleArea) }
-            ?: return false
+        if (node == null) {
+            // Label not found: tap where TikTok puts the bookmark icon (right column,
+            // below like and comments).
+            Log.i(TAG, "Save button label not found; tapping its usual position")
+            dispatch(
+                tapPath(screen.x * SAVE_ICON_X, screen.y * SAVE_ICON_Y),
+                TAP_DURATION_MS,
+                "save tap (position)"
+            )
+            FeedbackSound.save()
+            return true
+        }
 
         // Click the button, or its nearest clickable parent (the label often sits on an
         // image inside a clickable layout).
