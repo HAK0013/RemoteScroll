@@ -11,8 +11,18 @@ android {
         applicationId = "com.remotescroll.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
+    }
+
+    // APK file name carries the version, e.g. RemoteScroll-v1.1.apk
+    applicationVariants.all {
+        val variant = this
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                "RemoteScroll-v${variant.versionName}" +
+                    (if (variant.buildType.name == "debug") "" else "-${variant.buildType.name}") + ".apk"
+        }
     }
 
     buildTypes {
