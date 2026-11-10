@@ -50,12 +50,12 @@ enum class HoldAction(
         const val MAX_GAP_MS = 3000
 
         /**
-         * true = Press count style (2 presses like, 3 lock, 4 save); false = Hold style.
-         * Press count is for remotes whose release arrives at a fixed delay (seen with the
-         * key filter path), which makes hold length impossible to measure.
+         * true = Press count style (2 presses like, 3 lock, 4 save, hold = lock);
+         * false = Hold style. Press count suits remotes that end every hold early
+         * (e.g. after about 1.5 s), where long holds can't be reached.
          */
         fun countStyle(context: Context): Boolean =
-            // Until the user picks, follow the key filter setting (holds don't work there).
+            // Until the user picks, keep what earlier versions chose with the key filter on.
             prefs(context).getBoolean(KEY_STYLE, KeyLog.useKeyFilter(context))
 
         fun setCountStyle(context: Context, on: Boolean) {

@@ -84,7 +84,7 @@ class GestureAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        keyHandler = MediaKeyHandler(this, "key filter", swallowIgnored = false, holdsMeasurable = false)
+        keyHandler = MediaKeyHandler(this, "key filter", swallowIgnored = false)
         lockOverlay = LockOverlay(this).apply {
             onUnlockedByUser = {
                 FeedbackSound.lockOff()
@@ -98,10 +98,8 @@ class GestureAccessibilityService : AccessibilityService() {
         // Only take over media keys while the user has RemoteScroll switched on.
         // Otherwise music apps etc. keep working normally.
         if (!RemoteMediaService.isRunning) return false
-        // By default let media keys go on to our MediaSession. On some phones, keys taken
-        // here are held back by the system until long after the press (seen in the Remote
-        // test log: each UP arrived only after the multi-click wait), which broke 2 and 3
-        // clicks. The key filter path stays as an option for remotes that need it.
+        // By default let media keys go on to our MediaSession; the key filter path is an
+        // option for remotes that only work this way (see "Catch keys early").
         if (!KeyLog.useKeyFilter(this)) return false
         return keyHandler?.onKeyEvent(event) ?: false
     }

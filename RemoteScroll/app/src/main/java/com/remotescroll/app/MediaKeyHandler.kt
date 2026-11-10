@@ -22,8 +22,8 @@ import android.widget.Toast
  *                             the button runs the last one reached.
  *    or, in Press count style: 2 presses like, 3 pocket lock, 4 save (1, 2, 3 beeps as
  *                             the presses are counted). A burst ends after a quiet gap.
- *                             Holding Play/Pause toggles pocket lock (2 beeps), but only
- *                             on a path where holds can be measured ([holdsMeasurable]).
+ *                             Holding Play/Pause toggles pocket lock (2 beeps). Some
+ *                             remotes end every hold at about 1.5 s, so keep it shorter.
  *
  * Next/Previous long presses fire as soon as the threshold is reached while the key is still
  * held, so the user gets feedback without having to let go. The matching ACTION_UP is ignored.
@@ -35,14 +35,11 @@ import android.widget.Toast
  * @param swallowIgnored what to do with a press from a remote the user did not choose:
  *   true = consume it silently (MediaSession path: otherwise the session would still
  *   act on it through its transport callbacks); false = pass it on (key filter path).
- * @param holdsMeasurable false on the key filter path: there the release can arrive at a
- *   fixed ~1.5 s delay whatever the real hold, so every press would look like a hold.
  */
 class MediaKeyHandler(
     private val context: Context,
     private val via: String,
-    private val swallowIgnored: Boolean,
-    private val holdsMeasurable: Boolean = true
+    private val swallowIgnored: Boolean
 ) {
 
     companion object {
@@ -127,18 +124,16 @@ class MediaKeyHandler(
 
         if (code in PLAY_PAUSE_KEYS && HoldAction.countStyle(context)) {
             countPress()
-            if (holdsMeasurable) {
-                val runnable = Runnable {
-                    // A hold, not a press: drop the burst and toggle pocket lock.
-                    state.longFired = true
-                    resetPressCount()
-                    FeedbackSound.beeps(HoldAction.LOCK.beeps)
-                    KeyLog.note("hold: ${context.getString(HoldAction.LOCK.labelRes)} (2 beeps)")
-                    runHoldAction(HoldAction.LOCK)
-                }
-                state.timers += runnable
-                handler.postDelayed(runnable, HoldAction.countLockHoldMs(context))
+            val runnable = Runnable {
+                // A hold, not a press: drop the burst and toggle pocket lock.
+                state.longFired = true
+                resetPressCount()
+                FeedbackSound.beeps(HoldAction.LOCK.beeps)
+                KeyLog.note("hold: ${context.getString(HoldAction.LOCK.labelRes)} (2 beeps)")
+                runHoldAction(HoldAction.LOCK)
             }
+            state.timers += runnable
+            handler.postDelayed(runnable, HoldAction.countLockHoldMs(context))
             return
         }
         if (code in PLAY_PAUSE_KEYS) {

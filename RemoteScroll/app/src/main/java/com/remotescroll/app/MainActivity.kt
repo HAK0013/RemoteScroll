@@ -73,9 +73,6 @@ class MainActivity : AppCompatActivity() {
             isChecked = KeyLog.useKeyFilter(this@MainActivity)
             setOnCheckedChangeListener { _, on ->
                 KeyLog.setUseKeyFilter(this@MainActivity, on)
-                // On that path releases arrive at a fixed delay, so holds can't be measured.
-                if (on) HoldAction.setCountStyle(this@MainActivity, true)
-                showStyle()
             }
         }
         textKeyLog = findViewById(R.id.textKeyLog)
@@ -234,9 +231,7 @@ class MainActivity : AppCompatActivity() {
             if (count) android.view.View.VISIBLE else android.view.View.GONE
         findViewById<android.view.View>(R.id.groupHold).visibility =
             if (count) android.view.View.GONE else android.view.View.VISIBLE
-        findViewById<TextView>(R.id.textCountLockHelp).setText(
-            if (KeyLog.useKeyFilter(this)) R.string.count_lock_help_filter else R.string.count_lock_help_ok
-        )
+        findViewById<TextView>(R.id.textCountLockHelp).setText(R.string.count_lock_help_ok)
     }
 
     /** One slider per Play/Pause hold action, in whole seconds. */
