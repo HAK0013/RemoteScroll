@@ -32,7 +32,17 @@ import android.widget.Toast
  * Used by both input paths (MediaSession in [RemoteMediaService] and key filtering in
  * [GestureAccessibilityService]). Must be called on the main thread.
  */
-class MediaKeyHandler(private val context: Context, private val via: String) {
+/**
+ * @param via name of the input path, shown in the Remote test log.
+ * @param swallowIgnored what to do with a press from a remote the user did not choose:
+ *   true = consume it silently (MediaSession path: otherwise the session would still
+ *   act on it through its transport callbacks); false = pass it on (key filter path).
+ */
+class MediaKeyHandler(
+    private val context: Context,
+    private val via: String,
+    private val swallowIgnored: Boolean
+) {
 
     companion object {
         private const val TAG = "MediaKeyHandler"
@@ -79,6 +89,12 @@ class MediaKeyHandler(private val context: Context, private val via: String) {
     fun onKeyEvent(event: KeyEvent): Boolean {
         if (!handles(event.keyCode)) return false
         KeyLog.key(event, via)
+        if (!RemoteFilter.isAllowed(context, event)) {
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                KeyLog.note("=> ignored: ${RemoteFilter.deviceName(event)} is not a chosen remote")
+            }
+            return swallowIgnored
+        }
         when (event.action) {
             KeyEvent.ACTION_DOWN -> onDown(event)
             KeyEvent.ACTION_UP -> onUp(event)

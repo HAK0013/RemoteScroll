@@ -44,7 +44,8 @@ object KeyLog {
             KeyEvent.ACTION_UP -> "UP"
             else -> "action ${event.action}"
         }
-        add("${KeyEvent.keyCodeToString(event.keyCode).removePrefix("KEYCODE_")} $action  [$via]")
+        val device = RemoteFilter.deviceName(event)?.let { ", $it" } ?: ""
+        add("${KeyEvent.keyCodeToString(event.keyCode).removePrefix("KEYCODE_")} $action  [$via$device]")
     }
 
     fun note(message: String) = add(message)

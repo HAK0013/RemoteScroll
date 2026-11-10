@@ -84,7 +84,7 @@ class GestureAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
-        keyHandler = MediaKeyHandler(this, "key filter")
+        keyHandler = MediaKeyHandler(this, "key filter", swallowIgnored = false)
         lockOverlay = LockOverlay(this).apply {
             onUnlockedByUser = {
                 FeedbackSound.lockOff()
@@ -149,6 +149,16 @@ class GestureAccessibilityService : AccessibilityService() {
     }
 
     fun toggleLock() = if (isLocked) hideLock() else showLock()
+
+    /**
+     * Sleep timer ran out: remove pocket lock and go to the home screen. Leaving TikTok
+     * always pauses it (a tap could resume a paused video instead). The screen then times
+     * out and locks as usual.
+     */
+    fun sleepNow() {
+        hideLock()
+        performGlobalAction(GLOBAL_ACTION_HOME)
+    }
 
     // ---------------------------------------------------------------- gestures
 

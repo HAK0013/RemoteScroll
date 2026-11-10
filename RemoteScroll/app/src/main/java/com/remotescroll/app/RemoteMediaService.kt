@@ -8,6 +8,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.IBinder
 import android.support.v4.media.MediaMetadataCompat
 import android.support.v4.media.session.MediaSessionCompat
@@ -32,6 +34,33 @@ class RemoteMediaService : Service() {
         private const val NOTIFICATION_ID = 1001
         private const val ACTION_STOP = "com.remotescroll.app.action.STOP"
         private const val ACTION_TOGGLE_LOCK = "com.remotescroll.app.action.TOGGLE_LOCK"
+        private const val ACTION_SLEEP = "com.remotescroll.app.action.SLEEP"
+        private const val EXTRA_MINUTES = "minutes"
+
+        /** When the sleep timer ends (System.currentTimeMillis), or 0 if it is off. */
+        @Volatile
+        var sleepAtMillis = 0L
+            private set
+
+        /** Minutes the running sleep timer was set to, or 0. */
+        @Volatile
+        var sleepMinutes = 0
+            private set
+
+        /**
+         * Sets the sleep timer: after [minutes] the remote stops, pocket lock goes away and
+         * TikTok is paused (sent to the background). 0 turns the timer off. Starts the
+         * service if it is not running.
+         */
+        fun setSleepTimer(context: Context, minutes: Int) {
+            if (minutes <= 0 && !isRunning) return
+            ContextCompat.startForegroundService(
+                context,
+                Intent(context, RemoteMediaService::class.java)
+                    .setAction(ACTION_SLEEP)
+                    .putExtra(EXTRA_MINUTES, minutes)
+            )
+        }
 
         @Volatile
         var isRunning = false
@@ -60,10 +89,16 @@ class RemoteMediaService : Service() {
     private var mediaSession: MediaSessionCompat? = null
     private lateinit var keyHandler: MediaKeyHandler
     private val silentPlayer = SilentAudioPlayer()
+    private val handler = Handler(Looper.getMainLooper())
+    private val sleepRunnable = Runnable {
+        Log.i(TAG, "Sleep timer finished")
+        GestureAccessibilityService.instance?.sleepNow()
+        stopSelf()
+    }
 
     override fun onCreate() {
         super.onCreate()
-        keyHandler = MediaKeyHandler(this, "media session")
+        keyHandler = MediaKeyHandler(this, "media session", swallowIgnored = true)
         instance = this
         createNotificationChannel()
     }
@@ -104,11 +139,31 @@ class RemoteMediaService : Service() {
         if (mediaSession == null) mediaSession = createMediaSession()
         silentPlayer.start()
         isRunning = true
+        if (intent?.action == ACTION_SLEEP) {
+            scheduleSleep(intent.getIntExtra(EXTRA_MINUTES, 0))
+            updateNotification()
+        }
         return START_STICKY
+    }
+
+    private fun scheduleSleep(minutes: Int) {
+        handler.removeCallbacks(sleepRunnable)
+        if (minutes <= 0) {
+            sleepAtMillis = 0L
+            sleepMinutes = 0
+            return
+        }
+        val delay = minutes * 60_000L
+        sleepAtMillis = System.currentTimeMillis() + delay
+        sleepMinutes = minutes
+        handler.postDelayed(sleepRunnable, delay)
     }
 
     override fun onDestroy() {
         isRunning = false
+        handler.removeCallbacks(sleepRunnable)
+        sleepAtMillis = 0L
+        sleepMinutes = 0
         if (instance === this) instance = null
         // Never leave the screen blacked out once the remote stops working.
         GestureAccessibilityService.instance?.hideLock()
@@ -201,6 +256,18 @@ class RemoteMediaService : Service() {
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .apply {
+                if (sleepAtMillis > 0) {
+                    // Live countdown to the sleep timer.
+                    setSubText(getString(R.string.sleep_notification))
+                    setShowWhen(true)
+                    setWhen(sleepAtMillis)
+                    setUsesChronometer(true)
+                    setChronometerCountDown(true)
+                } else {
+                    setShowWhen(false)
+                }
+            }
             .setContentIntent(
                 PendingIntent.getActivity(
                     this,

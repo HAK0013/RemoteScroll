@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- Runtime permission on Android 13+ for the persistent notification -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lists paired Bluetooth devices so the user can choose which remotes control TikTok -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
 
     <!--
         BIND_ACCESSIBILITY_SERVICE is not a <uses-permission>. It is a system-only

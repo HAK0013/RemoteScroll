@@ -8,14 +8,18 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.text.format.DateFormat
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.RadioGroup
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import java.util.Date
 
 class MainActivity : AppCompatActivity() {
 
@@ -70,6 +74,95 @@ class MainActivity : AppCompatActivity() {
         }
         textKeyLog = findViewById(R.id.textKeyLog)
         findViewById<Button>(R.id.buttonClearLog).setOnClickListener { KeyLog.clear() }
+
+        setUpSleepTimer()
+        findViewById<Button>(R.id.buttonChooseRemotes).setOnClickListener { chooseRemotes() }
+    }
+
+    // ------------------------------------------------------------ sleep timer
+
+    private val sleepOptions by lazy {
+        mapOf(R.id.sleepOff to 0, R.id.sleep30 to 30, R.id.sleep60 to 60, R.id.sleep90 to 90)
+    }
+    private var updatingSleepUi = false
+
+    private fun setUpSleepTimer() {
+        findViewById<RadioGroup>(R.id.radioSleep).setOnCheckedChangeListener { _, id ->
+            if (updatingSleepUi) return@setOnCheckedChangeListener
+            val minutes = sleepOptions[id] ?: 0
+            if (minutes > 0 && !GestureAccessibilityService.isEnabled(this)) {
+                Toast.makeText(this, R.string.toast_enable_accessibility, Toast.LENGTH_LONG).show()
+            }
+            RemoteMediaService.setSleepTimer(this, minutes)
+            // The service applies it asynchronously.
+            buttonToggleService.postDelayed({ refreshSleepTimer(); refreshStatus() }, 400)
+        }
+    }
+
+    private fun refreshSleepTimer() {
+        val minutes = if (RemoteMediaService.sleepAtMillis > 0) RemoteMediaService.sleepMinutes else 0
+        val id = sleepOptions.entries.firstOrNull { it.value == minutes }?.key ?: R.id.sleepOff
+        updatingSleepUi = true
+        findViewById<RadioGroup>(R.id.radioSleep).check(id)
+        updatingSleepUi = false
+
+        val status = findViewById<TextView>(R.id.textSleepStatus)
+        status.text = if (RemoteMediaService.sleepAtMillis > 0) {
+            val at = DateFormat.getTimeFormat(this).format(Date(RemoteMediaService.sleepAtMillis))
+            getString(R.string.sleep_status_on, at)
+        } else {
+            getString(R.string.sleep_status_off)
+        }
+    }
+
+    // ------------------------------------------------------------ remotes
+
+    private val bluetoothPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) chooseRemotes()
+            else Toast.makeText(this, R.string.remotes_permission_denied, Toast.LENGTH_LONG).show()
+        }
+
+    private fun chooseRemotes() {
+        if (!RemoteFilter.hasPermission(this)) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                bluetoothPermissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+            return
+        }
+        // Keep chosen names that are no longer paired, so they can still be unticked.
+        val chosen = RemoteFilter.selected(this)
+        val names = (RemoteFilter.pairedNames(this) + chosen).distinct().sortedBy { it.lowercase() }
+        if (names.isEmpty()) {
+            Toast.makeText(this, R.string.remotes_none_paired, Toast.LENGTH_LONG).show()
+            return
+        }
+        val checked = BooleanArray(names.size) { names[it] in chosen }
+        AlertDialog.Builder(this)
+            .setTitle(R.string.remotes_dialog_title)
+            .setMultiChoiceItems(names.toTypedArray(), checked) { _, which, isChecked ->
+                checked[which] = isChecked
+            }
+            .setPositiveButton(R.string.remotes_dialog_save) { _, _ ->
+                RemoteFilter.setSelected(this, names.filterIndexed { i, _ -> checked[i] }.toSet())
+                refreshRemotes()
+            }
+            .setNeutralButton(R.string.remotes_dialog_all) { _, _ ->
+                RemoteFilter.setSelected(this, emptySet())
+                refreshRemotes()
+            }
+            .show()
+    }
+
+    private fun refreshRemotes() {
+        val chosen = RemoteFilter.selected(this)
+        val summary = if (chosen.isEmpty()) {
+            getString(R.string.remotes_all)
+        } else {
+            getString(R.string.remotes_some, chosen.sortedBy { it.lowercase() }.joinToString(", ")) +
+                getString(R.string.remotes_note)
+        }
+        findViewById<TextView>(R.id.textRemotes).text = summary
     }
 
     private lateinit var textKeyLog: TextView
@@ -133,6 +226,8 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshStatus()
+        refreshSleepTimer()
+        refreshRemotes()
         // Remote test: while this screen is open, presses are only logged.
         KeyLog.testing = true
         KeyLog.listener = { showKeyLog() }
