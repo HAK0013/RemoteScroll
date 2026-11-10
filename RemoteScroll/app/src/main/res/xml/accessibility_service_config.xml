@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    canPerformGestures: allows dispatchGesture() (swipes and taps).
+    flagRequestFilterKeyEvents / canRequestFilterKeyEvents: lets the service also see
+    media keys from remotes that connect as a Bluetooth HID keyboard. Those keys go
+    through the input pipeline rather than straight to the MediaSession.
+-->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/accessibility_description"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRequestFilterKeyEvents"
+    android:canPerformGestures="true"
+    android:canRequestFilterKeyEvents="true"
+    android:notificationTimeout="100"
+    android:settingsActivity="com.remotescroll.app.MainActivity" />

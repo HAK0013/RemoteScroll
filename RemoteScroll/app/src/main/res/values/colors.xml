@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="brand">#FF0F7B6C</color>
+    <color name="brand_dark">#FF0A5A4F</color>
+    <color name="status_ok">#FF2E7D32</color>
+    <color name="status_off">#FFC62828</color>
+    <color name="ic_launcher_background">#FF0F7B6C</color>
+</resources>

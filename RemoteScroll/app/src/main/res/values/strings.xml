@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">RemoteScroll</string>
+    <string name="accessibility_label">RemoteScroll gestures</string>
+    <string name="accessibility_description">Lets RemoteScroll perform swipes and taps on the screen when you press buttons on your Bluetooth media remote, so you can scroll TikTok without touching the screen. RemoteScroll only reacts to the Next, Previous and Play/Pause keys and does not read screen content.</string>
+
+    <string name="instructions">1. Enable the accessibility service.\n2. Start the remote service.\n3. Open TikTok and use your Bluetooth remote:\n\n• Next: next video (swipe up)\n• Previous: previous video (swipe down)\n• Hold Next: volume up\n• Hold Previous: volume down\n• Play/Pause: tap centre (pause/resume)</string>
+
+    <string name="service_running">Remote service: RUNNING</string>
+    <string name="service_stopped">Remote service: STOPPED</string>
+    <string name="accessibility_enabled">Accessibility service: ENABLED</string>
+    <string name="accessibility_disabled">Accessibility service: DISABLED</string>
+
+    <string name="start_service">Start remote service</string>
+    <string name="stop_service">Stop remote service</string>
+    <string name="open_accessibility">Open Accessibility settings</string>
+
+    <string name="notification_channel_name">Remote control</string>
+    <string name="notification_channel_description">Shown while RemoteScroll is listening for media buttons</string>
+    <string name="notification_title">RemoteScroll is active</string>
+    <string name="notification_text">Listening for your Bluetooth remote</string>
+    <string name="notification_stop">Stop</string>
+
+    <string name="toast_enable_accessibility">Enable the RemoteScroll accessibility service first</string>
+    <string name="toast_notifications_denied">Notification permission denied. The service still runs, but its notification may be hidden.</string>
+</resources>
