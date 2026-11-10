@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.widget.Button
+import android.widget.CheckBox
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -63,6 +64,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.buttonOpenTikTokLocked).setOnClickListener { openTikTok(locked = true) }
 
         setUpClickWindow()
+        findViewById<CheckBox>(R.id.checkKeyFilter).apply {
+            isChecked = KeyLog.useKeyFilter(this@MainActivity)
+            setOnCheckedChangeListener { _, on -> KeyLog.setUseKeyFilter(this@MainActivity, on) }
+        }
         textKeyLog = findViewById(R.id.textKeyLog)
         findViewById<Button>(R.id.buttonClearLog).setOnClickListener { KeyLog.clear() }
     }

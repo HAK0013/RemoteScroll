@@ -28,6 +28,8 @@
     <string name="lock_hint">🔒 Pocket lock\n\nRemote still controls TikTok\nHold screen 2 s or hold Play/Pause to unlock</string>
     <string name="click_window_label">Multi-click wait: %1$.2f s</string>
     <string name="click_window_help">How long to wait for another Play/Pause press before acting. Longer makes 2 and 3 clicks easier on slow Bluetooth remotes, but 1 click (pause) waits that long too.</string>
+    <string name="key_filter_label">Catch keys early (old way)</string>
+    <string name="key_filter_help">Leave this off. Turn it on only if your remote does nothing with it off. On some phones it delays every press, which stops 2 and 3 clicks from working.</string>
     <string name="remote_test_title">Remote test</string>
     <string name="remote_test_help">With this screen open (and the remote service running), press buttons on your remote. Each press is listed here with the time since the previous one. Nothing is tapped while this screen is open.</string>
     <string name="remote_test_empty">(no presses yet)</string>

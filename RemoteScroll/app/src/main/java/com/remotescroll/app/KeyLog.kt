@@ -18,6 +18,7 @@ object KeyLog {
     private const val MAX_LINES = 30
     private const val PREFS = "remote_scroll"
     private const val KEY_CLICK_WINDOW = "click_window_ms"
+    private const val KEY_USE_FILTER = "use_key_filter"
     const val DEFAULT_CLICK_WINDOW_MS = 800
     const val MIN_CLICK_WINDOW_MS = 250
     const val MAX_CLICK_WINDOW_MS = 1500
@@ -63,6 +64,18 @@ object KeyLog {
     fun clickWindowMs(context: Context): Long =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
             .getInt(KEY_CLICK_WINDOW, DEFAULT_CLICK_WINDOW_MS).toLong()
+
+    /**
+     * Take media keys in the accessibility key filter (old behaviour) instead of letting
+     * them reach the MediaSession. Off by default: see GestureAccessibilityService.onKeyEvent.
+     */
+    fun useKeyFilter(context: Context): Boolean =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getBoolean(KEY_USE_FILTER, false)
+
+    fun setUseKeyFilter(context: Context, on: Boolean) {
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+            .putBoolean(KEY_USE_FILTER, on).apply()
+    }
 
     fun setClickWindowMs(context: Context, ms: Int) {
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
