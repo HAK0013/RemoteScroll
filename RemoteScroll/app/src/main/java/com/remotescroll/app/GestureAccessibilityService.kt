@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Path
 import android.graphics.Point
+import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.os.Looper
@@ -15,6 +16,8 @@ import android.util.Log
 import android.view.Display
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 
 /**
  * Performs swipes and taps with dispatchGesture().
@@ -33,6 +36,19 @@ class GestureAccessibilityService : AccessibilityService() {
         private const val TAP_DURATION_MS = 50L
         /** Gap between the two taps of a double tap (TikTok's "like"). */
         private const val DOUBLE_TAP_GAP_MS = 100L
+
+        /**
+         * Words in the label of TikTok's Save / Favorites button, in the languages TikTok
+         * is most used in around here. Lower case.
+         */
+        private val SAVE_WORDS = listOf(
+            "favorite", "favourite", "bookmark", "save",  // English
+            "yêu thích", "lưu",                           // Vietnamese
+            "รายการโปรด", "บันทึก",                         // Thai
+            "kegemaran", "simpan", "favorit",             // Malay / Indonesian
+            "收藏",                                        // Chinese
+            "お気に入り", "즐겨찾기"                         // Japanese / Korean
+        )
 
         /** Time for the window manager to apply FLAG_NOT_TOUCHABLE before we inject. */
         private const val PASS_THROUGH_SETTLE_MS = 60L
@@ -144,6 +160,59 @@ class GestureAccessibilityService : AccessibilityService() {
             )
             .build()
         dispatch(gesture, "double tap")
+    }
+
+    /**
+     * Presses TikTok's Save / Favorites button on the video that is on screen. The button
+     * moves between phones and TikTok versions, so it is found by its accessibility label
+     * rather than by position. Works under pocket lock too: the click goes straight to the
+     * button instead of through the screen.
+     *
+     * @return false if no such button is visible.
+     */
+    fun pressSaveButton(): Boolean {
+        val screen = screenSize()
+        val visibleArea = Rect(0, 0, screen.x, screen.y)
+        val node = appRoots().firstNotNullOfOrNull { findSaveNode(it, visibleArea) }
+            ?: return false
+
+        // Click the button, or its nearest clickable parent (the label often sits on an
+        // image inside a clickable layout).
+        var target: AccessibilityNodeInfo? = node
+        while (target != null && !target.isClickable) target = target.parent
+        if (target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return true
+
+        // Fallback: tap the middle of the button.
+        val bounds = Rect().also { node.getBoundsInScreen(it) }
+        dispatch(tapPath(bounds.exactCenterX(), bounds.exactCenterY()), TAP_DURATION_MS, "save tap")
+        return true
+    }
+
+    /** Root nodes of the app windows on screen, the focused one (TikTok) first. */
+    private fun appRoots(): List<AccessibilityNodeInfo> {
+        val roots = mutableListOf<AccessibilityNodeInfo>()
+        rootInActiveWindow?.let { roots += it }
+        windows.filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION }
+            .mapNotNullTo(roots) { it.root }
+        return roots
+    }
+
+    /** Depth-first search for a visible node whose label matches [SAVE_WORDS]. */
+    private fun findSaveNode(node: AccessibilityNodeInfo, visibleArea: Rect): AccessibilityNodeInfo? {
+        if (!node.isVisibleToUser) return null
+        val label = (node.contentDescription ?: node.text)?.toString()?.lowercase()
+        if (label != null && SAVE_WORDS.any { it in label }) {
+            val bounds = Rect().also { node.getBoundsInScreen(it) }
+            // TikTok's side buttons are on the right half; skip off-screen videos.
+            if (Rect.intersects(bounds, visibleArea) && bounds.centerX() > visibleArea.width() / 2) {
+                return node
+            }
+        }
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            findSaveNode(child, visibleArea)?.let { return it }
+        }
+        return null
     }
 
     private fun tapPath(x: Float, y: Float) = Path().apply { moveTo(x, y) }

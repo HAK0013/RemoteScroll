@@ -2,15 +2,9 @@
 <resources>
     <string name="app_name">RemoteScroll</string>
     <string name="accessibility_label">RemoteScroll gestures</string>
-    <string name="accessibility_description">Lets RemoteScroll perform swipes and taps on the screen when you press buttons on your Bluetooth media remote, so you can scroll TikTok without touching the screen. RemoteScroll only reacts to the Next, Previous and Play/Pause keys and does not read screen content.</string>
+    <string name="accessibility_description">Lets RemoteScroll perform swipes and taps on the screen when you press buttons on your Bluetooth media remote, so you can scroll TikTok without touching the screen. RemoteScroll only reacts to the Next, Previous and Play/Pause keys. It reads the screen only when you triple-click Play/Pause, to find the TikTok Save button, and never stores or sends anything.</string>
 
-    <string name="instructions">1. Enable the accessibility service.\n2. Start the remote service.\n3. Open TikTok and use your Bluetooth remote:\n\n• Next: next video (swipe up)\n• Previous: previous video (swipe down)\n• Hold Next: volume up\n• Hold Previous: volume down\n• Play/Pause: tap centre (pause/resume)
-• Play/Pause twice: like the video
-• Hold Play/Pause: pocket lock on/off
-
-Pocket lock: the screen goes black and ignores touches, but TikTok keeps playing and your remote keeps working. Put the phone in your pocket or face down. To unlock, hold a finger on the screen for 2 seconds, or hold Play/Pause.
-
-Do not press the power button: a real lock pauses TikTok and Android blocks remote control behind the lock screen.</string>
+    <string name="instructions">1. Enable the accessibility service.\n2. Start the remote service.\n3. Open TikTok and use your Bluetooth remote:\n\n• Next: next video (swipe up)\n• Previous: previous video (swipe down)\n• Hold Next: volume up\n• Hold Previous: volume down\n• Play/Pause: tap centre (pause/resume)\n• Play/Pause twice: like the video\n• Play/Pause 3 times: save to Favorites\n• Hold Play/Pause: pocket lock on/off\n\nPocket lock: the screen goes black and ignores touches, but TikTok keeps playing and your remote keeps working. Put the phone in your pocket or face down. To unlock, hold a finger on the screen for 2 seconds, or hold Play/Pause.\n\nDo not press the power button: a real lock pauses TikTok and Android blocks remote control behind the lock screen.</string>
 
     <string name="service_running">Remote service: RUNNING</string>
     <string name="service_stopped">Remote service: STOPPED</string>
@@ -31,10 +25,8 @@ Do not press the power button: a real lock pauses TikTok and Android blocks remo
 
     <string name="open_tiktok">Open TikTok</string>
     <string name="open_tiktok_locked">Open TikTok with pocket lock</string>
-    <string name="lock_hint">🔒 Pocket lock
-
-Remote still controls TikTok
-Hold screen 2 s or hold Play/Pause to unlock</string>
+    <string name="lock_hint">🔒 Pocket lock\n\nRemote still controls TikTok\nHold screen 2 s or hold Play/Pause to unlock</string>
+    <string name="toast_save_not_found">Could not find the TikTok Save button</string>
     <string name="toast_tiktok_missing">TikTok is not installed</string>
 
     <string name="toast_enable_accessibility">Enable the RemoteScroll accessibility service first</string>

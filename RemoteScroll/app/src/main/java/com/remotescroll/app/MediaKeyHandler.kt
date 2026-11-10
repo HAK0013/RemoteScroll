@@ -18,6 +18,7 @@ import android.widget.Toast
  *  - PREVIOUS held > 500ms -> media volume -1 step
  *  - PLAY/PAUSE            -> tap the centre of the screen (pause/resume)
  *  - PLAY/PAUSE twice      -> double-tap the centre (like the video)
+ *  - PLAY/PAUSE 3 times    -> press TikTok's Save / Favorites button
  *  - PLAY/PAUSE held       -> pocket lock on/off (see [LockOverlay])
  *
  * A long press fires as soon as the threshold is reached while the key is still held,
@@ -31,7 +32,7 @@ class MediaKeyHandler(private val context: Context) {
     companion object {
         private const val TAG = "MediaKeyHandler"
         const val LONG_PRESS_MS = 500L
-        /** A second Play/Pause press within this window counts as a double click. */
+        /** Each further Play/Pause press within this window adds to the click count. */
         const val DOUBLE_CLICK_MS = 350L
 
         /** Play/pause variants: different remotes send different codes for the same button. */
@@ -59,8 +60,9 @@ class MediaKeyHandler(private val context: Context) {
     private val audioManager = context.getSystemService(AudioManager::class.java)
     private val presses = HashMap<Int, PressState>()
 
-    /** Pending single Play/Pause action, cancelled if a second press arrives in time. */
-    private var pendingSingleTap: Runnable? = null
+    /** Play/Pause clicks so far in the current burst, acted on when the burst ends. */
+    private var clickCount = 0
+    private val finishClicks = Runnable { fireClicks() }
 
     fun handles(keyCode: Int): Boolean = keyCode in HANDLED_KEYS
 
@@ -78,8 +80,7 @@ class MediaKeyHandler(private val context: Context) {
     fun performShortPress(keyCode: Int) = onShortPress(keyCode)
 
     fun release() {
-        pendingSingleTap?.let { handler.removeCallbacks(it) }
-        pendingSingleTap = null
+        resetClicks()
         presses.values.forEach { state -> state.longPressRunnable?.let { handler.removeCallbacks(it) } }
         presses.clear()
     }
@@ -142,30 +143,38 @@ class MediaKeyHandler(private val context: Context) {
     }
 
     /**
-     * Single click waits [DOUBLE_CLICK_MS] for a second click: one click pauses/resumes,
-     * two clicks like the video. (The single action is delayed by that window.)
+     * Counts clicks that come within [DOUBLE_CLICK_MS] of each other:
+     * 1 = pause/resume, 2 = like, 3 = save. One and two clicks wait out that window,
+     * because another click might still follow; the third click acts at once.
      */
     private fun onPlayPauseClick() {
-        val pending = pendingSingleTap
-        if (pending != null) {
-            handler.removeCallbacks(pending)
-            pendingSingleTap = null
-            GestureAccessibilityService.instance?.doubleTapCenter()
-            return
+        handler.removeCallbacks(finishClicks)
+        clickCount++
+        if (clickCount >= 3) fireClicks() else handler.postDelayed(finishClicks, DOUBLE_CLICK_MS)
+    }
+
+    private fun fireClicks() {
+        val count = clickCount
+        resetClicks()
+        val service = GestureAccessibilityService.instance ?: return
+        when (count) {
+            1 -> service.tapCenter()
+            2 -> service.doubleTapCenter()
+            else -> if (!service.pressSaveButton()) {
+                Toast.makeText(context, R.string.toast_save_not_found, Toast.LENGTH_SHORT).show()
+            }
         }
-        val single = Runnable {
-            pendingSingleTap = null
-            GestureAccessibilityService.instance?.tapCenter()
-        }
-        pendingSingleTap = single
-        handler.postDelayed(single, DOUBLE_CLICK_MS)
+    }
+
+    private fun resetClicks() {
+        handler.removeCallbacks(finishClicks)
+        clickCount = 0
     }
 
     private fun onLongPress(code: Int) {
         if (code in PLAY_PAUSE_KEYS) {
-            // A hold right after a click: drop the pending single tap.
-            pendingSingleTap?.let { handler.removeCallbacks(it) }
-            pendingSingleTap = null
+            // A hold right after a click: drop the pending clicks.
+            resetClicks()
             val service = GestureAccessibilityService.instance
             if (service == null) {
                 Toast.makeText(context, R.string.toast_enable_accessibility, Toast.LENGTH_SHORT).show()
