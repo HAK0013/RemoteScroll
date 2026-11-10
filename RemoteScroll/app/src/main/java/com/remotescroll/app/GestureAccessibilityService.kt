@@ -31,6 +31,8 @@ class GestureAccessibilityService : AccessibilityService() {
         private const val TAG = "GestureA11yService"
         private const val SWIPE_DURATION_MS = 200L
         private const val TAP_DURATION_MS = 50L
+        /** Gap between the two taps of a double tap (TikTok's "like"). */
+        private const val DOUBLE_TAP_GAP_MS = 100L
 
         /** Time for the window manager to apply FLAG_NOT_TOUCHABLE before we inject. */
         private const val PASS_THROUGH_SETTLE_MS = 60L
@@ -128,6 +130,24 @@ class GestureAccessibilityService : AccessibilityService() {
         dispatch(path, TAP_DURATION_MS, "tap")
     }
 
+    /** Two quick taps in the centre: TikTok likes the video. */
+    fun doubleTapCenter() {
+        val size = screenSize()
+        val x = size.x / 2f
+        val y = size.y / 2f
+        val gesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(tapPath(x, y), 0L, TAP_DURATION_MS))
+            .addStroke(
+                GestureDescription.StrokeDescription(
+                    tapPath(x, y), TAP_DURATION_MS + DOUBLE_TAP_GAP_MS, TAP_DURATION_MS
+                )
+            )
+            .build()
+        dispatch(gesture, "double tap")
+    }
+
+    private fun tapPath(x: Float, y: Float) = Path().apply { moveTo(x, y) }
+
     private fun verticalSwipe(fromFraction: Float, toFraction: Float) {
         val size = screenSize()
         val x = size.x / 2f
@@ -140,26 +160,29 @@ class GestureAccessibilityService : AccessibilityService() {
 
     private fun clampY(y: Float, height: Int) = y.coerceIn(1f, (height - 1).toFloat())
 
-    private fun dispatch(path: Path, durationMs: Long, label: String) {
+    private fun dispatch(path: Path, durationMs: Long, label: String) = dispatch(
+        GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(path, 0L, durationMs))
+            .build(),
+        label
+    )
+
+    private fun dispatch(gesture: GestureDescription, label: String) {
         val overlay = lockOverlay
         if (overlay == null || !overlay.isShowing) {
-            dispatchNow(path, durationMs, label) {}
+            dispatchNow(gesture, label) {}
             return
         }
         // Pocket lock is on: let this gesture fall through the overlay to TikTok.
         overlay.beginPassThrough()
         handler.postDelayed({
-            dispatchNow(path, durationMs, label) {
+            dispatchNow(gesture, label) {
                 handler.postDelayed({ overlay.endPassThrough() }, PASS_THROUGH_RESTORE_MS)
             }
         }, PASS_THROUGH_SETTLE_MS)
     }
 
-    private fun dispatchNow(path: Path, durationMs: Long, label: String, onDone: () -> Unit) {
-        val gesture = GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0L, durationMs))
-            .build()
-
+    private fun dispatchNow(gesture: GestureDescription, label: String, onDone: () -> Unit) {
         val accepted = dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
                 Log.d(TAG, "$label completed")

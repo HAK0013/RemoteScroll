@@ -16,7 +16,8 @@ import android.widget.Toast
  *  - PREVIOUS short press  -> swipe down (previous video)
  *  - NEXT held > 500 ms    -> media volume +1 step
  *  - PREVIOUS held > 500ms -> media volume -1 step
- *  - PLAY/PAUSE            -> tap the centre of the screen
+ *  - PLAY/PAUSE            -> tap the centre of the screen (pause/resume)
+ *  - PLAY/PAUSE twice      -> double-tap the centre (like the video)
  *  - PLAY/PAUSE held       -> pocket lock on/off (see [LockOverlay])
  *
  * A long press fires as soon as the threshold is reached while the key is still held,
@@ -30,6 +31,8 @@ class MediaKeyHandler(private val context: Context) {
     companion object {
         private const val TAG = "MediaKeyHandler"
         const val LONG_PRESS_MS = 500L
+        /** A second Play/Pause press within this window counts as a double click. */
+        const val DOUBLE_CLICK_MS = 350L
 
         /** Play/pause variants: different remotes send different codes for the same button. */
         private val PLAY_PAUSE_KEYS = setOf(
@@ -56,6 +59,9 @@ class MediaKeyHandler(private val context: Context) {
     private val audioManager = context.getSystemService(AudioManager::class.java)
     private val presses = HashMap<Int, PressState>()
 
+    /** Pending single Play/Pause action, cancelled if a second press arrives in time. */
+    private var pendingSingleTap: Runnable? = null
+
     fun handles(keyCode: Int): Boolean = keyCode in HANDLED_KEYS
 
     /** @return true if the event was consumed. */
@@ -72,6 +78,8 @@ class MediaKeyHandler(private val context: Context) {
     fun performShortPress(keyCode: Int) = onShortPress(keyCode)
 
     fun release() {
+        pendingSingleTap?.let { handler.removeCallbacks(it) }
+        pendingSingleTap = null
         presses.values.forEach { state -> state.longPressRunnable?.let { handler.removeCallbacks(it) } }
         presses.clear()
     }
@@ -129,12 +137,35 @@ class MediaKeyHandler(private val context: Context) {
         when (code) {
             KeyEvent.KEYCODE_MEDIA_NEXT -> service.swipeUp()
             KeyEvent.KEYCODE_MEDIA_PREVIOUS -> service.swipeDown()
-            in PLAY_PAUSE_KEYS -> service.tapCenter()
+            in PLAY_PAUSE_KEYS -> onPlayPauseClick()
         }
+    }
+
+    /**
+     * Single click waits [DOUBLE_CLICK_MS] for a second click: one click pauses/resumes,
+     * two clicks like the video. (The single action is delayed by that window.)
+     */
+    private fun onPlayPauseClick() {
+        val pending = pendingSingleTap
+        if (pending != null) {
+            handler.removeCallbacks(pending)
+            pendingSingleTap = null
+            GestureAccessibilityService.instance?.doubleTapCenter()
+            return
+        }
+        val single = Runnable {
+            pendingSingleTap = null
+            GestureAccessibilityService.instance?.tapCenter()
+        }
+        pendingSingleTap = single
+        handler.postDelayed(single, DOUBLE_CLICK_MS)
     }
 
     private fun onLongPress(code: Int) {
         if (code in PLAY_PAUSE_KEYS) {
+            // A hold right after a click: drop the pending single tap.
+            pendingSingleTap?.let { handler.removeCallbacks(it) }
+            pendingSingleTap = null
             val service = GestureAccessibilityService.instance
             if (service == null) {
                 Toast.makeText(context, R.string.toast_enable_accessibility, Toast.LENGTH_SHORT).show()
