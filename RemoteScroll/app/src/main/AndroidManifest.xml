@@ -19,13 +19,15 @@
         so that only the system can bind to it.
     -->
 
-    <!-- Android 11+ package visibility: lets us find and open TikTok -->
+    <!-- Android 11+ package visibility: lets us find and open TikTok, YouTube and Instagram -->
     <queries>
         <package android:name="com.zhiliaoapp.musically" />
         <package android:name="com.ss.android.ugc.trill" />
         <package android:name="com.zhiliaoapp.musically.go" />
         <package android:name="com.ss.android.ugc.tiktok.lite" />
         <package android:name="com.ss.android.ugc.aweme" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.instagram.android" />
     </queries>
 
     <application

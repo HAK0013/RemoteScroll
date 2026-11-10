@@ -4,7 +4,7 @@
     <string name="accessibility_label">RemoteScroll gestures</string>
     <string name="accessibility_description">Lets RemoteScroll perform swipes and taps on the screen when you press buttons on your Bluetooth media remote, so you can scroll TikTok without touching the screen. RemoteScroll only reacts to the Next, Previous and Play/Pause keys. It reads the screen only when you ask it to save a video, to find the TikTok Save button, and never stores or sends anything.</string>
 
-    <string name="instructions">1. Enable the accessibility service.\n2. Start the remote service.\n3. Open TikTok and use your Bluetooth remote:\n\n• Next: next video (swipe up)\n• Previous: previous video (swipe down)\n• Hold Next: volume up\n• Hold Previous: volume down\n• Play/Pause: pause/resume\n• Hold Play/Pause: 1 beep = like, 2 beeps = pocket lock on/off, 3 beeps = save. Let go after the beeps you want.\n• Or, in Press count style: 2 presses = like, 3 = pocket lock, 4 = save, hold = pocket lock (or like or save, your choice).\n\nPocket lock: the screen goes black and ignores touches, but TikTok keeps playing and your remote keeps working. Put the phone in your pocket or face down. To unlock, hold a finger on the screen for 2 seconds, or use the pocket lock action on the remote (2 beeps).\n\nDo not press the power button: a real lock pauses TikTok and Android blocks remote control behind the lock screen.</string>
+    <string name="instructions">1. Enable the accessibility service.\n2. Start the remote service.\n3. Open TikTok, YouTube Shorts or Instagram Reels and use your Bluetooth remote:\n\n• Next: next video (swipe up)\n• Previous: previous video (swipe down)\n• Hold Next: volume up\n• Hold Previous: volume down\n• Play/Pause: pause/resume\n• Hold Play/Pause: 1 beep = like, 2 beeps = pocket lock on/off, 3 beeps = save. Let go after the beeps you want.\n• Or, in Press count style: 2 presses = like, 3 = pocket lock, 4 = save, hold = pocket lock (or like or save, your choice).\n\nPocket lock: the screen goes black and ignores touches, but TikTok keeps playing and your remote keeps working. Put the phone in your pocket or face down. To unlock, hold a finger on the screen for 2 seconds, or use the pocket lock action on the remote (2 beeps).\n\nDo not press the power button: a real lock pauses TikTok and Android blocks remote control behind the lock screen.</string>
 
     <string name="service_running">Remote service: RUNNING</string>
     <string name="service_stopped">Remote service: STOPPED</string>
@@ -23,9 +23,23 @@
     <string name="notification_lock">Pocket lock</string>
     <string name="notification_unlock">Unlock</string>
 
-    <string name="open_tiktok">Open TikTok</string>
-    <string name="open_tiktok_locked">Open TikTok with pocket lock</string>
-    <string name="lock_hint">🔒 Pocket lock\n\nRemote still controls TikTok\nHold screen 2 s, or use the remote\n(2 beeps = pocket lock), to unlock</string>
+    <string name="open_tiktok">Open %1$s</string>
+    <string name="open_tiktok_locked">Open %1$s with pocket lock</string>
+    <string name="lock_hint">🔒 Pocket lock\n\nRemote still controls the video\nHold screen 2 s, or use the remote\n(2 beeps = pocket lock), to unlock</string>
+    <string name="app_title">Video app</string>
+    <string name="app_tiktok">TikTok</string>
+    <string name="app_youtube">YouTube Shorts</string>
+    <string name="app_instagram">Instagram Reels</string>
+    <string name="app_note_tiktok">Everything works: scroll, pause, like, save, pocket lock.</string>
+    <string name="app_note_youtube">Scroll, pause, like and pocket lock work. Save only works if a Save button is on screen.</string>
+    <string name="app_note_instagram">Scroll, like and pocket lock work. A tap mutes or unmutes in Reels instead of pausing. Save only works if a Save button is on screen.</string>
+    <string name="auto_title">Automatic</string>
+    <string name="auto_start_label">Start when a chosen remote connects</string>
+    <string name="auto_start_help_ok">When %1$s connects over Bluetooth, the remote service starts and the video app opens. When it disconnects, the remote stops and pocket lock goes off.</string>
+    <string name="auto_start_help_none">Choose your remote under Remotes first. Auto-start only reacts to the remotes you chose.</string>
+    <string name="proximity_label">Pocket lock in pocket or face down</string>
+    <string name="proximity_help">Uses the proximity sensor while the remote service runs. Pocket lock turns on after 1.5 s covered, and off again when you take the phone out.</string>
+    <string name="proximity_missing">This phone has no proximity sensor.</string>
     <string name="sleep_title">Sleep timer</string>
     <string name="sleep_off">Off</string>
     <string name="sleep_30">30 min</string>
@@ -71,8 +85,8 @@
     <string name="remote_test_empty">(no presses yet)</string>
     <string name="clear_log">Clear</string>
     <string name="footer">Created by HAK007</string>
-    <string name="toast_save_not_found">Could not find the TikTok Save button</string>
-    <string name="toast_tiktok_missing">TikTok is not installed</string>
+    <string name="toast_save_not_found">No Save button on screen</string>
+    <string name="toast_tiktok_missing">%1$s is not installed</string>
 
     <string name="toast_enable_accessibility">Enable the RemoteScroll accessibility service first</string>
     <string name="toast_notifications_denied">Notification permission denied. The service still runs, but its notification may be hidden.</string>

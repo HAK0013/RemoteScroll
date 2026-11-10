@@ -255,6 +255,7 @@ class MediaKeyHandler(
             HoldAction.LIKE -> service.doubleTapCenter()
             HoldAction.LOCK -> service.toggleLock()
             HoldAction.SAVE -> if (!service.pressSaveButton()) {
+                KeyLog.note("save: no Save button on screen")
                 Toast.makeText(context, R.string.toast_save_not_found, Toast.LENGTH_SHORT).show()
             }
         }

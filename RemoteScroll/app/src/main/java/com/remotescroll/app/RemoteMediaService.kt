@@ -139,6 +139,7 @@ class RemoteMediaService : Service() {
         if (mediaSession == null) mediaSession = createMediaSession()
         silentPlayer.start()
         isRunning = true
+        GestureAccessibilityService.instance?.updateProximity()
         if (intent?.action == ACTION_SLEEP) {
             scheduleSleep(intent.getIntExtra(EXTRA_MINUTES, 0))
             updateNotification()
@@ -167,6 +168,7 @@ class RemoteMediaService : Service() {
         if (instance === this) instance = null
         // Never leave the screen blacked out once the remote stops working.
         GestureAccessibilityService.instance?.hideLock()
+        GestureAccessibilityService.instance?.updateProximity()
         silentPlayer.stop()
         mediaSession?.run {
             isActive = false

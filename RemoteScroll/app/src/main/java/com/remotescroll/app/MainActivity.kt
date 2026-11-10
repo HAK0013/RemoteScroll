@@ -80,6 +80,8 @@ class MainActivity : AppCompatActivity() {
 
         setUpSleepTimer()
         findViewById<Button>(R.id.buttonChooseRemotes).setOnClickListener { chooseRemotes() }
+        setUpVideoApp()
+        setUpAutomatic()
     }
 
     // ------------------------------------------------------------ sleep timer
@@ -166,6 +168,76 @@ class MainActivity : AppCompatActivity() {
                 getString(R.string.remotes_note)
         }
         findViewById<TextView>(R.id.textRemotes).text = summary
+        refreshAutomatic()
+    }
+
+    // ------------------------------------------------------------ video app
+
+    private val appIds by lazy {
+        mapOf(
+            R.id.appTikTok to VideoApp.TIKTOK,
+            R.id.appYouTube to VideoApp.YOUTUBE,
+            R.id.appInstagram to VideoApp.INSTAGRAM
+        )
+    }
+
+    private fun setUpVideoApp() {
+        val radio = findViewById<RadioGroup>(R.id.radioApp)
+        val current = VideoApp.current(this)
+        radio.check(appIds.entries.first { it.value == current }.key)
+        radio.setOnCheckedChangeListener { _, id ->
+            appIds[id]?.let { VideoApp.setCurrent(this, it) }
+            showVideoApp()
+        }
+        showVideoApp()
+    }
+
+    private fun showVideoApp() {
+        val app = VideoApp.current(this)
+        val name = getString(app.labelRes)
+        findViewById<Button>(R.id.buttonOpenTikTok).text = getString(R.string.open_tiktok, name)
+        findViewById<Button>(R.id.buttonOpenTikTokLocked).text = getString(R.string.open_tiktok_locked, name)
+        findViewById<TextView>(R.id.textAppNote).setText(
+            when (app) {
+                VideoApp.TIKTOK -> R.string.app_note_tiktok
+                VideoApp.YOUTUBE -> R.string.app_note_youtube
+                VideoApp.INSTAGRAM -> R.string.app_note_instagram
+            }
+        )
+    }
+
+    // ------------------------------------------------------------ automatic
+
+    private fun setUpAutomatic() {
+        findViewById<CheckBox>(R.id.checkAutoStart).apply {
+            isChecked = AutoStart.isEnabled(this@MainActivity)
+            setOnCheckedChangeListener { _, on ->
+                AutoStart.setEnabled(this@MainActivity, on)
+                // Bluetooth names need the Nearby devices permission.
+                if (on && !RemoteFilter.hasPermission(this@MainActivity)) chooseRemotes()
+                refreshAutomatic()
+            }
+        }
+        findViewById<CheckBox>(R.id.checkProximity).apply {
+            isChecked = ProximityLock.isEnabled(this@MainActivity)
+            isEnabled = ProximityLock.hasSensor(this@MainActivity)
+            setOnCheckedChangeListener { _, on ->
+                ProximityLock.setEnabled(this@MainActivity, on)
+                GestureAccessibilityService.instance?.updateProximity()
+            }
+        }
+        if (!ProximityLock.hasSensor(this)) {
+            findViewById<TextView>(R.id.textProximityHelp).setText(R.string.proximity_missing)
+        }
+    }
+
+    private fun refreshAutomatic() {
+        val chosen = RemoteFilter.selected(this)
+        findViewById<TextView>(R.id.textAutoStartHelp).text = if (chosen.isEmpty()) {
+            getString(R.string.auto_start_help_none)
+        } else {
+            getString(R.string.auto_start_help_ok, chosen.sortedBy { it.lowercase() }.joinToString(", "))
+        }
     }
 
     private lateinit var textKeyLog: TextView
@@ -301,8 +373,8 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Starts the remote service (if needed) and opens TikTok. With [locked], pocket lock
-     * switches on once TikTok is in front.
+     * Starts the remote service (if needed) and opens the chosen video app. With [locked],
+     * pocket lock switches on once the app is in front.
      */
     private fun openTikTok(locked: Boolean) {
         if (!GestureAccessibilityService.isEnabled(this)) {
@@ -310,8 +382,9 @@ class MainActivity : AppCompatActivity() {
             return
         }
         if (!RemoteMediaService.isRunning) RemoteMediaService.start(this)
-        if (!TikTokLauncher.launch(this)) {
-            Toast.makeText(this, R.string.toast_tiktok_missing, Toast.LENGTH_LONG).show()
+        val app = VideoApp.current(this)
+        if (!app.launch(this)) {
+            Toast.makeText(this, getString(R.string.toast_tiktok_missing, getString(app.labelRes)), Toast.LENGTH_LONG).show()
             return
         }
         if (locked) {
@@ -327,6 +400,7 @@ class MainActivity : AppCompatActivity() {
         refreshStatus()
         refreshSleepTimer()
         refreshRemotes()
+        refreshAutomatic()
         // Remote test: while this screen is open, presses are only logged.
         KeyLog.testing = true
         KeyLog.listener = { showKeyLog() }

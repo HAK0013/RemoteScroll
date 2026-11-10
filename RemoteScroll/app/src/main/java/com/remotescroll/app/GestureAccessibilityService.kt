@@ -2,9 +2,12 @@ package com.remotescroll.app
 
 import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
+import android.bluetooth.BluetoothDevice
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Path
 import android.graphics.Point
 import android.graphics.Rect
@@ -18,6 +21,8 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import androidx.core.content.ContextCompat
+import androidx.core.content.IntentCompat
 
 /**
  * Performs swipes and taps with dispatchGesture().
@@ -59,6 +64,8 @@ class GestureAccessibilityService : AccessibilityService() {
         private const val PASS_THROUGH_SETTLE_MS = 60L
         /** Keep the overlay see-through a moment longer so the gesture's last events land. */
         private const val PASS_THROUGH_RESTORE_MS = 80L
+        /** After a remote connects, wait this long before starting (connection settles). */
+        private const val AUTO_START_DELAY_MS = 1_500L
 
         @Volatile
         var instance: GestureAccessibilityService? = null
@@ -81,17 +88,115 @@ class GestureAccessibilityService : AccessibilityService() {
 
     val isLocked: Boolean get() = lockOverlay?.isShowing == true
 
+    /** Package of the app window in front (from window-state events), or null. */
+    @Volatile
+    var foregroundPackage: String? = null
+        private set
+
+    /** The supported video app in front, or null if another app is. */
+    val foregroundVideoApp: VideoApp? get() = VideoApp.forPackage(foregroundPackage)
+
+    private var proximity: ProximityLock? = null
+    /** Pocket lock was switched on by the proximity sensor, so it may switch it off too. */
+    private var lockedByProximity = false
+
     override fun onServiceConnected() {
         super.onServiceConnected()
         instance = this
         keyHandler = MediaKeyHandler(this, "key filter", swallowIgnored = false)
         lockOverlay = LockOverlay(this).apply {
             onUnlockedByUser = {
+                lockedByProximity = false
                 FeedbackSound.lockOff()
                 RemoteMediaService.refreshNotification(this@GestureAccessibilityService)
             }
         }
+        proximity = ProximityLock(this, onCovered = ::onPhoneCovered, onUncovered = ::onPhoneUncovered)
+        updateProximity()
+        registerBluetoothReceiver()
         Log.i(TAG, "Accessibility service connected")
+    }
+
+    // ------------------------------------------------------------- proximity lock
+
+    /** Listen to the proximity sensor only while it is wanted: setting on and remote running. */
+    fun updateProximity() {
+        proximity?.setActive(ProximityLock.isEnabled(this) && RemoteMediaService.isRunning)
+    }
+
+    private fun onPhoneCovered() {
+        if (isLocked || foregroundVideoApp == null) return
+        KeyLog.note("proximity: covered, pocket lock on")
+        showLock()
+        lockedByProximity = isLocked
+    }
+
+    private fun onPhoneUncovered() {
+        if (!lockedByProximity || !isLocked) return
+        KeyLog.note("proximity: uncovered, pocket lock off")
+        hideLock()
+    }
+
+    // ------------------------------------------------------- bluetooth auto-start
+
+    private var bluetoothReceiverRegistered = false
+
+    private val bluetoothReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (!AutoStart.isEnabled(context)) return
+            val device = IntentCompat.getParcelableExtra(
+                intent, BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java
+            ) ?: return
+            val name = try {
+                @Suppress("MissingPermission") // receiving this broadcast already needs it
+                device.name
+            } catch (e: SecurityException) {
+                null
+            } ?: return
+            if (RemoteFilter.selected(context).none { it.equals(name, ignoreCase = true) }) return
+            when (intent.action) {
+                BluetoothDevice.ACTION_ACL_CONNECTED -> onRemoteConnected(name)
+                BluetoothDevice.ACTION_ACL_DISCONNECTED -> onRemoteDisconnected(name)
+            }
+        }
+    }
+
+    private fun registerBluetoothReceiver() {
+        if (bluetoothReceiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+        }
+        // System broadcasts still arrive with NOT_EXPORTED.
+        ContextCompat.registerReceiver(this, bluetoothReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
+        bluetoothReceiverRegistered = true
+    }
+
+    private fun onRemoteConnected(name: String) {
+        KeyLog.note("auto-start: $name connected")
+        // Give the connection a moment to settle before media keys start flowing.
+        handler.postDelayed({
+            if (!RemoteMediaService.isRunning) {
+                try {
+                    RemoteMediaService.start(this)
+                } catch (e: Exception) {
+                    // E.g. ForegroundServiceStartNotAllowedException on some phones.
+                    Log.e(TAG, "Auto-start could not start the remote service", e)
+                    KeyLog.note("auto-start: Android refused to start the remote service")
+                    return@postDelayed
+                }
+            }
+            if (!VideoApp.current(this).launch(this)) {
+                KeyLog.note("auto-start: ${getString(VideoApp.current(this).labelRes)} is not installed")
+            }
+        }, AUTO_START_DELAY_MS)
+    }
+
+    private fun onRemoteDisconnected(name: String) {
+        if (!RemoteMediaService.isRunning) return
+        KeyLog.note("auto-start: $name disconnected, stopping")
+        hideLock()
+        RemoteMediaService.stop(this)
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
@@ -104,7 +209,13 @@ class GestureAccessibilityService : AccessibilityService() {
         return keyHandler?.onKeyEvent(event) ?: false
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        val pkg = event.packageName?.toString() ?: return
+        // The notification shade and our own windows don't change which app is in front.
+        if (pkg == "com.android.systemui" || pkg == packageName) return
+        foregroundPackage = pkg
+    }
 
     override fun onInterrupt() = Unit
 
@@ -121,6 +232,15 @@ class GestureAccessibilityService : AccessibilityService() {
     private fun cleanup() {
         if (instance === this) instance = null
         handler.removeCallbacksAndMessages(null)
+        proximity?.setActive(false)
+        proximity = null
+        if (bluetoothReceiverRegistered) {
+            try {
+                unregisterReceiver(bluetoothReceiver)
+            } catch (_: IllegalArgumentException) {
+            }
+            bluetoothReceiverRegistered = false
+        }
         lockOverlay?.hide()
         lockOverlay = null
         keyHandler?.release()
@@ -142,6 +262,7 @@ class GestureAccessibilityService : AccessibilityService() {
         val overlay = lockOverlay ?: return
         if (!overlay.isShowing) return
         overlay.hide()
+        lockedByProximity = false
         FeedbackSound.lockOff()
         RemoteMediaService.refreshNotification(this)
     }
@@ -203,6 +324,9 @@ class GestureAccessibilityService : AccessibilityService() {
         val node = appRoots().firstNotNullOfOrNull { findSaveNode(it, visibleArea) }
         if (node != null && clickSmallButton(node, screen)) {
             Log.i(TAG, "Save button clicked by label")
+        } else if (foregroundVideoApp?.saveByPosition == false) {
+            // YouTube / Instagram: something else sits where TikTok's bookmark is.
+            return false
         } else {
             // No usable label: tap the bookmark icon where TikTok draws it (right column,
             // below like and comments). Not the label's bounds: they can be off.
