@@ -1,8 +1,32 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="brand">#FF0F7B6C</color>
-    <color name="brand_dark">#FF0A5A4F</color>
-    <color name="status_ok">#FF2E7D32</color>
-    <color name="status_off">#FFC62828</color>
-    <color name="ic_launcher_background">#FF0F7B6C</color>
+    <!-- Brand / Neon Accent Colors -->
+    <color name="brand">#00D2FF</color>
+    <color name="brand_dark">#0099CC</color>
+    <color name="brand_glow">#3300D2FF</color>
+    <color name="accent_purple">#8B5CF6</color>
+    <color name="accent_blue">#3A7BD5</color>
+    
+    <!-- Status Colors -->
+    <color name="status_ok">#10B981</color>
+    <color name="status_ok_bg">#2010B981</color>
+    <color name="status_off">#EF4444</color>
+    <color name="status_off_bg">#20EF4444</color>
+    
+    <!-- Dark Background & Glass Surfaces -->
+    <color name="bg_dark">#0B0F19</color>
+    <color name="card_dark">#151C2C</color>
+    <color name="card_dark_elevated">#1E273D</color>
+    <color name="card_border">#233047</color>
+    <color name="console_bg">#070A10</color>
+    <color name="console_border">#1A2338</color>
+    <color name="console_text">#38BDF8</color>
+    
+    <!-- Text Colors -->
+    <color name="text_primary">#F8FAFC</color>
+    <color name="text_secondary">#94A3B8</color>
+    <color name="text_muted">#64748B</color>
+
+    <!-- Legacy / Launcher -->
+    <color name="ic_launcher_background">#0B0F19</color>
 </resources>

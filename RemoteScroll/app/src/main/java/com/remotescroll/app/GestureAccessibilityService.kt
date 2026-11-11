@@ -14,6 +14,7 @@ import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
 import android.view.Display
@@ -21,6 +22,7 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import android.widget.Toast
 import androidx.core.content.ContextCompat
 import androidx.core.content.IntentCompat
 
@@ -41,6 +43,65 @@ class GestureAccessibilityService : AccessibilityService() {
         private const val TAP_DURATION_MS = 50L
         /** Gap between the two taps of a double tap (TikTok's "like"). */
         private const val DOUBLE_TAP_GAP_MS = 100L
+
+        private const val PREFS = "remote_scroll"
+        private const val KEY_AUTO_LOCK_SCROLLS = "auto_lock_scrolls"
+        private const val KEY_MINI_CONTROL = "mini_control_enabled"
+
+        /** How many scrolls before pocket lock turns on automatically, or 0 = off. */
+        fun autoLockScrolls(context: Context): Int =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getInt(KEY_AUTO_LOCK_SCROLLS, 0)
+
+        fun setAutoLockScrolls(context: Context, count: Int) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putInt(KEY_AUTO_LOCK_SCROLLS, count.coerceAtLeast(0)).apply()
+        }
+
+        /** Whether the floating on-screen mini controller is enabled on supported video apps. */
+        fun isMiniControlEnabled(context: Context): Boolean =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_MINI_CONTROL, true)
+
+        fun setMiniControlEnabled(context: Context, enabled: Boolean) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_MINI_CONTROL, enabled).apply()
+        }
+
+        private const val KEY_MINI_CONTROL_ALWAYS = "mini_control_always_on"
+
+        /** If true, the mini controller stays on screen across all apps instead of video apps only. */
+        fun isMiniControlAlwaysOn(context: Context): Boolean =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_MINI_CONTROL_ALWAYS, false)
+
+        fun setMiniControlAlwaysOn(context: Context, alwaysOn: Boolean) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_MINI_CONTROL_ALWAYS, alwaysOn).apply()
+        }
+
+        private const val KEY_AUTO_SKIP_ADS = "auto_skip_ads"
+        private const val KEY_INACTIVITY_SLEEP_MINS = "inactivity_sleep_mins"
+
+        /** Auto-skip sponsored ads and LIVE streams. */
+        fun isAutoSkipAdsEnabled(context: Context): Boolean =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_AUTO_SKIP_ADS, false)
+
+        fun setAutoSkipAdsEnabled(context: Context, enabled: Boolean) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_AUTO_SKIP_ADS, enabled).apply()
+        }
+
+        /** Inactivity sleep timeout in minutes, or 0 = disabled. */
+        fun inactivitySleepMinutes(context: Context): Int =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getInt(KEY_INACTIVITY_SLEEP_MINS, 0)
+
+        fun setInactivitySleepMinutes(context: Context, minutes: Int) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putInt(KEY_INACTIVITY_SLEEP_MINS, minutes.coerceAtLeast(0)).apply()
+        }
 
         /** Usual position of TikTok's bookmark (Save) icon, as a fraction of the screen. */
         // Measured from a 1152x2560 screenshot: bookmark icon centre at (1068, 1930).
@@ -66,6 +127,7 @@ class GestureAccessibilityService : AccessibilityService() {
         private const val PASS_THROUGH_RESTORE_MS = 80L
         /** After a remote connects, wait this long before starting (connection settles). */
         private const val AUTO_START_DELAY_MS = 1_500L
+        private const val AUTO_SKIP_COOLDOWN_MS = 2_500L
 
         @Volatile
         var instance: GestureAccessibilityService? = null
@@ -85,6 +147,13 @@ class GestureAccessibilityService : AccessibilityService() {
     private var keyHandler: MediaKeyHandler? = null
     private val handler = Handler(Looper.getMainLooper())
     private var lockOverlay: LockOverlay? = null
+    private var miniControlOverlay: MiniControlOverlay? = null
+    private var calibrationOverlay: PointsCalibrationOverlay? = null
+    private var floatingNavOverlay: FloatingNavOverlay? = null
+
+    /** Counts scroll gestures (swipe up / swipe down) since the last unlock or service start. */
+    @Volatile
+    var scrollCount = 0
 
     val isLocked: Boolean get() = lockOverlay?.isShowing == true
 
@@ -93,12 +162,84 @@ class GestureAccessibilityService : AccessibilityService() {
     var foregroundPackage: String? = null
         private set
 
-    /** The supported video app in front, or null if another app is. */
-    val foregroundVideoApp: VideoApp? get() = VideoApp.forPackage(foregroundPackage)
+    /**
+     * The supported video app in front, or null if another app is.
+     * Uses multi-level fallback (cached pkg -> rootInActiveWindow -> application windows)
+     * so transient popups/keyboards never corrupt foreground detection.
+     */
+    val foregroundVideoApp: VideoApp?
+        get() {
+            // 1. Check cached foregroundPackage
+            VideoApp.forPackage(foregroundPackage)?.let { return it }
+
+            // 2. Check rootInActiveWindow
+            try {
+                val activePkg = rootInActiveWindow?.packageName?.toString()
+                if (activePkg != null && !isTransientOrSystemPackage(activePkg)) {
+                    VideoApp.forPackage(activePkg)?.let {
+                        foregroundPackage = activePkg
+                        return it
+                    }
+                }
+            } catch (_: Exception) {}
+
+            // 3. Check active application windows on screen
+            try {
+                for (win in windows) {
+                    if (win.type == AccessibilityWindowInfo.TYPE_APPLICATION) {
+                        val winPkg = win.root?.packageName?.toString() ?: continue
+                        if (!isTransientOrSystemPackage(winPkg)) {
+                            VideoApp.forPackage(winPkg)?.let {
+                                foregroundPackage = winPkg
+                                return it
+                            }
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
+
+            return null
+        }
+
+    /** True if package is a transient system component (keyboard, system dialog, autofill, etc.) */
+    fun isTransientOrSystemPackage(pkg: String): Boolean {
+        if (pkg == packageName) return true // our own overlay windows
+        val lower = pkg.lowercase()
+        if (lower.contains("inputmethod") || lower.contains("keyboard") || lower.contains("ime")) return true
+        if (lower == "com.android.systemui" || lower.endsWith(".systemui")) return true
+        if (lower == "android" || lower.contains("intentresolver") || lower.contains("permissioncontroller")) return true
+        if (lower.contains("autofill") || lower == "com.google.android.gms") return true
+        return false
+    }
 
     private var proximity: ProximityLock? = null
     /** Pocket lock was switched on by the proximity sensor, so it may switch it off too. */
     private var lockedByProximity = false
+
+    @Volatile
+    private var lastActivityUptimeMs = SystemClock.uptimeMillis()
+
+    fun noteUserActivity() {
+        lastActivityUptimeMs = SystemClock.uptimeMillis()
+    }
+
+    private val inactivityCheckRunnable = object : Runnable {
+        override fun run() {
+            checkInactivity()
+            handler.postDelayed(this, 30_000L)
+        }
+    }
+
+    private fun checkInactivity() {
+        val timeoutMins = inactivitySleepMinutes(this)
+        if (timeoutMins <= 0 || !RemoteMediaService.isRunning) return
+        val inactiveMs = SystemClock.uptimeMillis() - lastActivityUptimeMs
+        if (inactiveMs >= timeoutMins * 60_000L) {
+            KeyLog.note("smart sleep: no activity for $timeoutMins min, putting phone to sleep")
+            sleepNow()
+            RemoteMediaService.stop(this)
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -107,13 +248,24 @@ class GestureAccessibilityService : AccessibilityService() {
         lockOverlay = LockOverlay(this).apply {
             onUnlockedByUser = {
                 lockedByProximity = false
+                scrollCount = 0
+                KeyLog.note("unlocked by user: reset scroll count to 0")
                 FeedbackSound.lockOff()
+                updateMiniControl()
+                miniControlOverlay?.updateStatus(0, autoLockScrolls(this@GestureAccessibilityService))
                 RemoteMediaService.refreshNotification(this@GestureAccessibilityService)
             }
         }
+        miniControlOverlay = MiniControlOverlay(this)
+        calibrationOverlay = PointsCalibrationOverlay(this)
+        floatingNavOverlay = FloatingNavOverlay(this)
         proximity = ProximityLock(this, onCovered = ::onPhoneCovered, onUncovered = ::onPhoneUncovered)
         updateProximity()
+        updateMiniControl()
+        updateFloatingNav()
         registerBluetoothReceiver()
+        handler.postDelayed(inactivityCheckRunnable, 30_000L)
+        scheduleAutoSkipCheck(800L)
         Log.i(TAG, "Accessibility service connected")
     }
 
@@ -200,6 +352,7 @@ class GestureAccessibilityService : AccessibilityService() {
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
+        noteUserActivity()
         // Only take over media keys while the user has RemoteScroll switched on.
         // Otherwise music apps etc. keep working normally.
         if (!RemoteMediaService.isRunning) return false
@@ -209,12 +362,49 @@ class GestureAccessibilityService : AccessibilityService() {
         return keyHandler?.onKeyEvent(event) ?: false
     }
 
+    /** Time until which accessibility events are considered our own injected gestures. */
+    private var injectingUntilUptimeMs = 0L
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        val pkg = event.packageName?.toString() ?: return
-        // The notification shade and our own windows don't change which app is in front.
-        if (pkg == "com.android.systemui" || pkg == packageName) return
-        foregroundPackage = pkg
+        val type = event?.eventType ?: return
+        if (type == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString() ?: return
+            // Ignore transient popups/keyboards so foregroundPackage is never corrupted
+            if (isTransientOrSystemPackage(pkg)) return
+            foregroundPackage = pkg
+            updateMiniControl()
+            updateFloatingNav()
+            scheduleAutoSkipCheck(600L)
+            return
+        }
+
+        // On content changes or view scrolls: ensure mini control & floating nav are restored if hidden
+        if (type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED || type == AccessibilityEvent.TYPE_VIEW_SCROLLED) {
+            if (!isLocked && isMiniControlEnabled(this)) {
+                if (shouldShowMiniControl() && miniControlOverlay?.isShowing == false) {
+                    updateMiniControl()
+                }
+                if (shouldShowMiniControl() && GesturePoints.isFloatingNavEnabled(this) && floatingNavOverlay?.isShowing == false) {
+                    updateFloatingNav()
+                }
+            }
+            if (type == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+                scheduleAutoSkipCheck(500L)
+            }
+        }
+
+        // If the user manually interacts with the screen (touch/click/scroll) outside our lock,
+        // reset the auto-lock scroll counter so it starts back from 0 (or 1 on next remote scroll).
+        if (!isLocked &&
+            (type == AccessibilityEvent.TYPE_VIEW_CLICKED || type == AccessibilityEvent.TYPE_VIEW_SCROLLED)
+        ) {
+            noteUserActivity()
+            if (scrollCount > 0 && SystemClock.uptimeMillis() > injectingUntilUptimeMs) {
+                KeyLog.note("manual touch detected: reset scroll count from $scrollCount to 0")
+                scrollCount = 0
+                miniControlOverlay?.updateStatus(0, autoLockScrolls(this))
+            }
+        }
     }
 
     override fun onInterrupt() = Unit
@@ -241,8 +431,15 @@ class GestureAccessibilityService : AccessibilityService() {
             }
             bluetoothReceiverRegistered = false
         }
+        stopTurboSpeed()
         lockOverlay?.hide()
         lockOverlay = null
+        miniControlOverlay?.destroy()
+        miniControlOverlay = null
+        calibrationOverlay?.hide()
+        calibrationOverlay = null
+        floatingNavOverlay?.hide()
+        floatingNavOverlay = null
         keyHandler?.release()
         keyHandler = null
     }
@@ -254,7 +451,12 @@ class GestureAccessibilityService : AccessibilityService() {
         val overlay = lockOverlay ?: return
         if (overlay.isShowing) return
         overlay.show()
-        if (overlay.isShowing) FeedbackSound.lockOn()
+        if (overlay.isShowing) {
+            scrollCount = 0
+            FeedbackSound.lockOn()
+            updateMiniControl()
+            updateFloatingNav()
+        }
         RemoteMediaService.refreshNotification(this)
     }
 
@@ -263,11 +465,54 @@ class GestureAccessibilityService : AccessibilityService() {
         if (!overlay.isShowing) return
         overlay.hide()
         lockedByProximity = false
+        scrollCount = 0   // reset so auto-lock can count again from zero
         FeedbackSound.lockOff()
+        updateMiniControl()
+        updateFloatingNav()
         RemoteMediaService.refreshNotification(this)
     }
 
     fun toggleLock() = if (isLocked) hideLock() else showLock()
+
+    fun shouldShowMiniControl(): Boolean {
+        if (!isMiniControlEnabled(this)) return false
+        if (isLocked) return false
+        if (isMiniControlAlwaysOn(this)) return true
+        return foregroundVideoApp != null
+    }
+
+    /**
+     * Updates visibility and content of the on-screen mini control widget.
+     * Appears when mini controller is enabled, in a supported video app (e.g. TikTok) or always-on,
+     * and screen is not pocket-locked.
+     */
+    fun updateMiniControl() {
+        if (shouldShowMiniControl()) {
+            miniControlOverlay?.show()
+            miniControlOverlay?.updateStatus(scrollCount, autoLockScrolls(this))
+        } else {
+            miniControlOverlay?.hide()
+        }
+    }
+
+    fun updateFloatingNav() {
+        val shouldShow = GesturePoints.isFloatingNavEnabled(this) &&
+            !isLocked &&
+            (isMiniControlAlwaysOn(this) || foregroundVideoApp != null)
+        if (shouldShow) {
+            floatingNavOverlay?.show()
+        } else {
+            floatingNavOverlay?.hide()
+        }
+    }
+
+    fun showCalibration() {
+        calibrationOverlay?.show()
+    }
+
+    fun hideCalibration() {
+        calibrationOverlay?.hide()
+    }
 
     /**
      * Sleep timer ran out: remove pocket lock and go to the home screen. Leaving TikTok
@@ -281,24 +526,60 @@ class GestureAccessibilityService : AccessibilityService() {
 
     // ---------------------------------------------------------------- gestures
 
-    /** Finger moves from 70% to 30% of the height: TikTok shows the next video. */
-    fun swipeUp() = verticalSwipe(fromFraction = 0.70f, toFraction = 0.30f)
+    /** Finger moves between calibrated points: TikTok shows the next video. */
+    fun swipeUp() {
+        noteUserActivity()
+        val (startPt, endPt) = GesturePoints.getNextPoints(this)
+        val duration = GesturePoints.getSwipeDuration(this)
+        coordinateSwipe(startPt.x, startPt.y, endPt.x, endPt.y, duration)
+        onScrolled()
+        scheduleAutoSkipCheck(1_200L)
+    }
 
-    /** Finger moves from 30% to 70% of the height: TikTok shows the previous video. */
-    fun swipeDown() = verticalSwipe(fromFraction = 0.30f, toFraction = 0.70f)
+    /** Finger moves between calibrated points: TikTok shows the previous video. */
+    fun swipeDown() {
+        noteUserActivity()
+        val (startPt, endPt) = GesturePoints.getBackPoints(this)
+        val duration = GesturePoints.getSwipeDuration(this)
+        coordinateSwipe(startPt.x, startPt.y, endPt.x, endPt.y, duration)
+        onScrolled()
+        scheduleAutoSkipCheck(1_200L)
+    }
 
-    /** Single tap in the centre: TikTok pauses/resumes. */
+    /**
+     * Increments the scroll counter and shows pocket lock automatically once the
+     * user-configured threshold is reached.
+     */
+    private fun onScrolled() {
+        val threshold = autoLockScrolls(this)
+        miniControlOverlay?.updateStatus(scrollCount + 1, threshold)
+        if (isLocked) return                  // already locked, nothing to do
+        if (threshold <= 0) return            // feature is off
+        scrollCount++
+        KeyLog.note("scroll $scrollCount / $threshold")
+        miniControlOverlay?.updateStatus(scrollCount, threshold)
+        if (scrollCount >= threshold) {
+            KeyLog.note("auto-lock: $threshold scrolls reached, pocket lock on")
+            scrollCount = 0
+            showLock()
+        }
+    }
+
+    /** Tap at calibrated tap point: TikTok pauses/resumes. */
     fun tapCenter() {
         val size = screenSize()
-        val path = Path().apply { moveTo(size.x / 2f, size.y / 2f) }
+        val tapPt = GesturePoints.getTapPoint(this)
+        val path = Path().apply { moveTo(clampX(size.x * tapPt.x, size.x), clampY(size.y * tapPt.y, size.y)) }
         dispatch(path, TAP_DURATION_MS, "tap")
     }
 
-    /** Two quick taps in the centre: TikTok likes the video. */
+    /** Two quick taps at calibrated point: TikTok likes the video. */
     fun doubleTapCenter() {
+        injectingUntilUptimeMs = SystemClock.uptimeMillis() + DOUBLE_TAP_GAP_MS + (TAP_DURATION_MS * 2) + 400L
         val size = screenSize()
-        val x = size.x / 2f
-        val y = size.y / 2f
+        val tapPt = GesturePoints.getTapPoint(this)
+        val x = clampX(size.x * tapPt.x, size.x)
+        val y = clampY(size.y * tapPt.y, size.y)
         val gesture = GestureDescription.Builder()
             .addStroke(GestureDescription.StrokeDescription(tapPath(x, y), 0L, TAP_DURATION_MS))
             .addStroke(
@@ -382,26 +663,165 @@ class GestureAccessibilityService : AccessibilityService() {
         return null
     }
 
-    private fun tapPath(x: Float, y: Float) = Path().apply { moveTo(x, y) }
+    // ------------------------------------------------------------- 2x turbo speed
 
-    private fun verticalSwipe(fromFraction: Float, toFraction: Float) {
-        val size = screenSize()
-        val x = size.x / 2f
-        val path = Path().apply {
-            moveTo(x, clampY(size.y * fromFraction, size.y))
-            lineTo(x, clampY(size.y * toFraction, size.y))
-        }
-        dispatch(path, SWIPE_DURATION_MS, "swipe")
+    private var turboStroke: GestureDescription.StrokeDescription? = null
+    @Volatile
+    var isTurboActive = false
+        private set
+
+    /** Holds touch to trigger TikTok's 2x speed playback. */
+    fun startTurboSpeed() {
+        if (isTurboActive || isLocked) return
+        isTurboActive = true
+        noteUserActivity()
+        val screen = screenSize()
+        val turboPt = GesturePoints.getTurboPoint(this)
+        val x = clampX(screen.x * turboPt.x, screen.x)
+        val y = clampY(screen.y * turboPt.y, screen.y)
+        val path = Path().apply { moveTo(x, y) }
+
+        val stroke = GestureDescription.StrokeDescription(path, 0L, 120_000L, true)
+        val gesture = GestureDescription.Builder().addStroke(stroke).build()
+
+        dispatchGesture(gesture, object : GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) {
+                Log.d(TAG, "Turbo gesture started")
+            }
+            override fun onCancelled(gestureDescription: GestureDescription?) {
+                Log.w(TAG, "Turbo gesture cancelled")
+                isTurboActive = false
+                turboStroke = null
+            }
+        }, handler)
+        turboStroke = stroke
+        KeyLog.note("turbo: 2x speed active")
+        FeedbackSound.lockOff()
     }
 
+    /** Releases touch to return to normal 1x speed. */
+    fun stopTurboSpeed() {
+        if (!isTurboActive) return
+        isTurboActive = false
+        noteUserActivity()
+        val stroke = turboStroke
+        val screen = screenSize()
+        val turboPt = GesturePoints.getTurboPoint(this)
+        val x = clampX(screen.x * turboPt.x, screen.x)
+        val y = clampY(screen.y * turboPt.y, screen.y)
+        val path = Path().apply { moveTo(x, y) }
+
+        if (stroke != null) {
+            try {
+                val endStroke = stroke.continueStroke(path, 0L, 40L, false)
+                val endGesture = GestureDescription.Builder().addStroke(endStroke).build()
+                dispatchGesture(endGesture, null, handler)
+            } catch (e: Exception) {
+                Log.w(TAG, "Could not end turbo stroke", e)
+            }
+        }
+        turboStroke = null
+        KeyLog.note("turbo: 2x speed ended")
+    }
+
+    fun toggleTurboSpeed() {
+        if (isTurboActive) stopTurboSpeed() else startTurboSpeed()
+    }
+
+    // ------------------------------------------------------------- auto-skip ads & LIVE
+
+    private var lastAutoSkipUptimeMs = 0L
+    private val autoSkipRunnable = Runnable { checkAndSkipAds() }
+
+    fun scheduleAutoSkipCheck(delayMs: Long = 400L) {
+        if (!isAutoSkipAdsEnabled(this) || foregroundVideoApp == null || isLocked) return
+        handler.removeCallbacks(autoSkipRunnable)
+        handler.postDelayed(autoSkipRunnable, delayMs)
+    }
+
+    private fun checkAndSkipAds() {
+        if (!isAutoSkipAdsEnabled(this) || foregroundVideoApp == null || isLocked) return
+        if (SystemClock.uptimeMillis() - lastAutoSkipUptimeMs < AUTO_SKIP_COOLDOWN_MS) return
+
+        val detected = scanForAdOrLive() ?: return
+        lastAutoSkipUptimeMs = SystemClock.uptimeMillis()
+        KeyLog.note("auto-skip: $detected detected, swiping")
+        handler.post {
+            swipeUp()
+            Toast.makeText(this, "Auto-skipped $detected", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun scanForAdOrLive(): String? {
+        val roots = appRoots()
+        val adKeywords = listOf(
+            "sponsored", "promoted", "install now", "shop now", "order now",
+            "paid partnership", "learn more", "tải ngay", "quảng cáo", "ผู้สนับสนุน"
+        )
+        for (root in roots) {
+            val result = scanNodeForAdOrLive(root, adKeywords)
+            if (result != null) return result
+        }
+        return null
+    }
+
+    private fun scanNodeForAdOrLive(node: AccessibilityNodeInfo, adKeywords: List<String>): String? {
+        if (!node.isVisibleToUser) return null
+        val text = node.text?.toString()?.trim()
+        val desc = node.contentDescription?.toString()?.trim()
+        val label = (text ?: desc)?.lowercase()
+
+        if (label != null) {
+            if (text.equals("LIVE", ignoreCase = true) ||
+                text.equals("Tap to watch LIVE", ignoreCase = true) ||
+                text.equals("Top LIVE", ignoreCase = true) ||
+                desc?.startsWith("LIVE", ignoreCase = true) == true
+            ) {
+                return "LIVE stream"
+            }
+
+            for (kw in adKeywords) {
+                if (label.contains(kw)) {
+                    return "Sponsored Ad"
+                }
+            }
+        }
+
+        for (i in 0 until node.childCount) {
+            val child = node.getChild(i) ?: continue
+            val found = scanNodeForAdOrLive(child, adKeywords)
+            if (found != null) return found
+        }
+        return null
+    }
+
+    private fun tapPath(x: Float, y: Float) = Path().apply { moveTo(x, y) }
+
+    private fun coordinateSwipe(startXFrac: Float, startYFrac: Float, endXFrac: Float, endYFrac: Float, durationMs: Long) {
+        val size = screenSize()
+        val startX = clampX(size.x * startXFrac, size.x)
+        val startY = clampY(size.y * startYFrac, size.y)
+        val endX = clampX(size.x * endXFrac, size.x)
+        val endY = clampY(size.y * endYFrac, size.y)
+        val path = Path().apply {
+            moveTo(startX, startY)
+            lineTo(endX, endY)
+        }
+        dispatch(path, durationMs, "swipe")
+    }
+
+    private fun clampX(x: Float, width: Int) = x.coerceIn(1f, (width - 1).toFloat())
     private fun clampY(y: Float, height: Int) = y.coerceIn(1f, (height - 1).toFloat())
 
-    private fun dispatch(path: Path, durationMs: Long, label: String) = dispatch(
-        GestureDescription.Builder()
-            .addStroke(GestureDescription.StrokeDescription(path, 0L, durationMs))
-            .build(),
-        label
-    )
+    private fun dispatch(path: Path, durationMs: Long, label: String) {
+        injectingUntilUptimeMs = SystemClock.uptimeMillis() + durationMs + 400L
+        dispatch(
+            GestureDescription.Builder()
+                .addStroke(GestureDescription.StrokeDescription(path, 0L, durationMs))
+                .build(),
+            label
+        )
+    }
 
     private fun dispatch(gesture: GestureDescription, label: String) {
         val overlay = lockOverlay

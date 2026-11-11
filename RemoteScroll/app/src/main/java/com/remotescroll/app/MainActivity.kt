@@ -8,9 +8,12 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.text.Editable
+import android.text.TextWatcher
 import android.text.format.DateFormat
 import android.widget.Button
 import android.widget.CheckBox
+import android.widget.EditText
 import android.widget.RadioGroup
 import android.widget.SeekBar
 import android.widget.TextView
@@ -79,9 +82,13 @@ class MainActivity : AppCompatActivity() {
         findViewById<Button>(R.id.buttonClearLog).setOnClickListener { KeyLog.clear() }
 
         setUpSleepTimer()
+        setUpInactivitySleep()
         findViewById<Button>(R.id.buttonChooseRemotes).setOnClickListener { chooseRemotes() }
         setUpVideoApp()
         setUpAutomatic()
+        setUpAutoLock()
+        setUpMiniControl()
+        setUpGesturePoints()
     }
 
     // ------------------------------------------------------------ sleep timer
@@ -237,6 +244,153 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.auto_start_help_none)
         } else {
             getString(R.string.auto_start_help_ok, chosen.sortedBy { it.lowercase() }.joinToString(", "))
+        }
+    }
+
+    // ------------------------------------------------------------ auto-lock after scrolls
+
+    private fun setUpAutoLock() {
+        val radio = findViewById<RadioGroup>(R.id.radioAutoLock)
+        val edit = findViewById<EditText>(R.id.editAutoLockCount)
+        var updating = false
+
+        val current = GestureAccessibilityService.autoLockScrolls(this)
+        edit.setText(if (current > 0) current.toString() else "")
+
+        fun updateRadio(count: Int) {
+            updating = true
+            when (count) {
+                0 -> radio.check(R.id.autoLockOff)
+                5 -> radio.check(R.id.autoLock5)
+                10 -> radio.check(R.id.autoLock10)
+                else -> radio.check(R.id.autoLockCustom)
+            }
+            updating = false
+        }
+
+        updateRadio(current)
+
+        radio.setOnCheckedChangeListener { _, checkedId ->
+            if (updating) return@setOnCheckedChangeListener
+            val newCount = when (checkedId) {
+                R.id.autoLockOff -> 0
+                R.id.autoLock5 -> 5
+                R.id.autoLock10 -> 10
+                R.id.autoLockCustom -> edit.text.toString().toIntOrNull()?.takeIf { it > 0 } ?: 5
+                else -> 0
+            }
+            if (checkedId == R.id.autoLockCustom) {
+                edit.requestFocus()
+            }
+            updating = true
+            edit.setText(if (newCount > 0) newCount.toString() else "")
+            updating = false
+            GestureAccessibilityService.setAutoLockScrolls(this, newCount)
+            GestureAccessibilityService.instance?.let {
+                it.scrollCount = 0
+                it.updateMiniControl()
+            }
+        }
+
+        edit.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: Editable?) {
+                if (updating) return
+                val count = s?.toString()?.trim()?.toIntOrNull() ?: 0
+                updateRadio(count)
+                GestureAccessibilityService.setAutoLockScrolls(this@MainActivity, count)
+                GestureAccessibilityService.instance?.let {
+                    it.scrollCount = 0
+                    it.updateMiniControl()
+                }
+            }
+        })
+    }
+
+    // ------------------------------------------------------------ floating mini control
+
+    private fun setUpMiniControl() {
+        findViewById<CheckBox>(R.id.checkMiniControl).apply {
+            isChecked = GestureAccessibilityService.isMiniControlEnabled(this@MainActivity)
+            setOnCheckedChangeListener { _, isChecked ->
+                GestureAccessibilityService.setMiniControlEnabled(this@MainActivity, isChecked)
+                GestureAccessibilityService.instance?.updateMiniControl()
+            }
+        }
+
+        findViewById<CheckBox>(R.id.checkMiniControlAlways)?.apply {
+            isChecked = GestureAccessibilityService.isMiniControlAlwaysOn(this@MainActivity)
+            setOnCheckedChangeListener { _, isChecked ->
+                GestureAccessibilityService.setMiniControlAlwaysOn(this@MainActivity, isChecked)
+                GestureAccessibilityService.instance?.updateMiniControl()
+                GestureAccessibilityService.instance?.updateFloatingNav()
+            }
+        }
+
+        findViewById<CheckBox>(R.id.checkAutoSkipAds)?.apply {
+            isChecked = GestureAccessibilityService.isAutoSkipAdsEnabled(this@MainActivity)
+            setOnCheckedChangeListener { _, isChecked ->
+                GestureAccessibilityService.setAutoSkipAdsEnabled(this@MainActivity, isChecked)
+                if (isChecked) {
+                    GestureAccessibilityService.instance?.scheduleAutoSkipCheck(300L)
+                }
+            }
+        }
+    }
+
+    private fun setUpInactivitySleep() {
+        val radio = findViewById<RadioGroup>(R.id.radioInactivitySleep) ?: return
+        val current = GestureAccessibilityService.inactivitySleepMinutes(this)
+        when (current) {
+            10 -> radio.check(R.id.inactivity10)
+            15 -> radio.check(R.id.inactivity15)
+            30 -> radio.check(R.id.inactivity30)
+            else -> radio.check(R.id.inactivityOff)
+        }
+        radio.setOnCheckedChangeListener { _, checkedId ->
+            val mins = when (checkedId) {
+                R.id.inactivity10 -> 10
+                R.id.inactivity15 -> 15
+                R.id.inactivity30 -> 30
+                else -> 0
+            }
+            GestureAccessibilityService.setInactivitySleepMinutes(this, mins)
+            GestureAccessibilityService.instance?.noteUserActivity()
+        }
+    }
+
+    private fun setUpGesturePoints() {
+        findViewById<Button>(R.id.buttonCalibratePoints)?.setOnClickListener {
+            if (!GestureAccessibilityService.isEnabled(this)) {
+                Toast.makeText(this, R.string.toast_enable_accessibility, Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            GestureAccessibilityService.instance?.showCalibration()
+        }
+
+        val radio = findViewById<RadioGroup>(R.id.radioSwipeColumn) ?: return
+        val currentX = GesturePoints.getSwipeX(this)
+        when {
+            currentX <= 0.35f -> radio.check(R.id.colLeft)
+            currentX >= 0.65f -> radio.check(R.id.colRight)
+            else -> radio.check(R.id.colCenter)
+        }
+        radio.setOnCheckedChangeListener { _, checkedId ->
+            val newX = when (checkedId) {
+                R.id.colLeft -> 0.25f
+                R.id.colRight -> 0.75f
+                else -> 0.50f
+            }
+            GesturePoints.setSwipeX(this, newX)
+        }
+
+        findViewById<CheckBox>(R.id.checkFloatingNav)?.apply {
+            isChecked = GesturePoints.isFloatingNavEnabled(this@MainActivity)
+            setOnCheckedChangeListener { _, isChecked ->
+                GesturePoints.setFloatingNavEnabled(this@MainActivity, isChecked)
+                GestureAccessibilityService.instance?.updateFloatingNav()
+            }
         }
     }
 
