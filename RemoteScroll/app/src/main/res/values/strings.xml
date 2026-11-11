@@ -134,4 +134,13 @@
     <string name="swipe_col_right">Right (75%)</string>
     <string name="floating_nav_label">Floating Next &amp; Back buttons on screen</string>
     <string name="floating_nav_help">Adds draggable Next (▼) and Back (▲) buttons directly on your screen for quick thumb tapping.</string>
+
+    <!-- Audio-Only Sleep Blackout Mode -->
+    <string name="sleep_blackout_card_title">AUDIO-ONLY "PODCAST / SLEEP" BLACKOUT</string>
+    <string name="sleep_blackout_badge" formatted="false">AMOLED 0% LIGHT</string>
+    <string name="sleep_blackout_btn_start">🌙  Enter Sleep Blackout Mode Now</string>
+    <string name="sleep_blackout_btn_launch">🌙  Open %1$s in Sleep Blackout Mode</string>
+    <string name="sleep_blackout_help" formatted="false">Keeps video audio playing smoothly in the foreground while completely turning off the screen (100% true pitch black with 0% OLED light emission and lowest backlight). Perfect for listening in bed to stories, podcasts, interviews, or ASMR without draining battery or straining your eyes.</string>
+    <string name="sleep_gestures_label">Touch gestures in darkness</string>
+    <string name="sleep_gestures_help">Swipe Up/Down on the black screen to change videos in bed; Double-tap anywhere to wake; Single-tap for dim clock &amp; battery HUD.</string>
 </resources>

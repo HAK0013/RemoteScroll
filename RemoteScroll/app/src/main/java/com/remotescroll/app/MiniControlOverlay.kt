@@ -80,6 +80,7 @@ class MiniControlOverlay(private val service: GestureAccessibilityService) {
         val bubbleStatus = view.findViewById<TextView>(R.id.textBubbleStatus)
         val autoBtn = view.findViewById<TextView>(R.id.btnAutoLock)
         val turboBtn = view.findViewById<TextView>(R.id.btnTurbo2x)
+        val sleepBtn = view.findViewById<View>(R.id.btnSleep)
         val pocketLockBtn = view.findViewById<View>(R.id.btnPocketLock)
         val prevBtn = view.findViewById<View>(R.id.btnPrev)
         val nextBtn = view.findViewById<View>(R.id.btnNext)
@@ -95,6 +96,11 @@ class MiniControlOverlay(private val service: GestureAccessibilityService) {
         btnAutoLock = autoBtn
 
         // Buttons
+        sleepBtn?.setOnClickListener {
+            setExpanded(false)
+            service.showSleepBlackout()
+        }
+
         pocketLockBtn?.setOnClickListener {
             service.showLock()
         }

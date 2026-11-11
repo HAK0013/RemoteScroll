@@ -147,6 +147,7 @@ class GestureAccessibilityService : AccessibilityService() {
     private var keyHandler: MediaKeyHandler? = null
     private val handler = Handler(Looper.getMainLooper())
     private var lockOverlay: LockOverlay? = null
+    private var sleepBlackoutOverlay: SleepBlackoutOverlay? = null
     private var miniControlOverlay: MiniControlOverlay? = null
     private var calibrationOverlay: PointsCalibrationOverlay? = null
     private var floatingNavOverlay: FloatingNavOverlay? = null
@@ -156,6 +157,7 @@ class GestureAccessibilityService : AccessibilityService() {
     var scrollCount = 0
 
     val isLocked: Boolean get() = lockOverlay?.isShowing == true
+    val isSleepBlackout: Boolean get() = sleepBlackoutOverlay?.isShowing == true
 
     /** Package of the app window in front (from window-state events), or null. */
     @Volatile
@@ -254,6 +256,13 @@ class GestureAccessibilityService : AccessibilityService() {
                 updateMiniControl()
                 miniControlOverlay?.updateStatus(0, autoLockScrolls(this@GestureAccessibilityService))
                 RemoteMediaService.refreshNotification(this@GestureAccessibilityService)
+            }
+        }
+        sleepBlackoutOverlay = SleepBlackoutOverlay(this).apply {
+            onDismissed = {
+                updateMiniControl()
+                updateFloatingNav()
+                KeyLog.note("sleep blackout mode off")
             }
         }
         miniControlOverlay = MiniControlOverlay(this)
@@ -434,6 +443,8 @@ class GestureAccessibilityService : AccessibilityService() {
         stopTurboSpeed()
         lockOverlay?.hide()
         lockOverlay = null
+        sleepBlackoutOverlay?.hide()
+        sleepBlackoutOverlay = null
         miniControlOverlay?.destroy()
         miniControlOverlay = null
         calibrationOverlay?.hide()
@@ -474,9 +485,34 @@ class GestureAccessibilityService : AccessibilityService() {
 
     fun toggleLock() = if (isLocked) hideLock() else showLock()
 
+    // ------------------------------------------------------------- audio-only sleep blackout
+
+    /** Fullscreen AMOLED blackout with audio playing in foreground. See [SleepBlackoutOverlay]. */
+    fun showSleepBlackout() {
+        if (isLocked) hideLock()
+        val overlay = sleepBlackoutOverlay ?: return
+        if (overlay.isShowing) return
+        overlay.show()
+        if (overlay.isShowing) {
+            updateMiniControl()
+            updateFloatingNav()
+            KeyLog.note("sleep blackout mode on")
+        }
+    }
+
+    fun hideSleepBlackout() {
+        val overlay = sleepBlackoutOverlay ?: return
+        if (!overlay.isShowing) return
+        overlay.hide()
+        updateMiniControl()
+        updateFloatingNav()
+    }
+
+    fun toggleSleepBlackout() = if (isSleepBlackout) hideSleepBlackout() else showSleepBlackout()
+
     fun shouldShowMiniControl(): Boolean {
         if (!isMiniControlEnabled(this)) return false
-        if (isLocked) return false
+        if (isLocked || isSleepBlackout) return false
         if (isMiniControlAlwaysOn(this)) return true
         return foregroundVideoApp != null
     }
@@ -484,7 +520,7 @@ class GestureAccessibilityService : AccessibilityService() {
     /**
      * Updates visibility and content of the on-screen mini control widget.
      * Appears when mini controller is enabled, in a supported video app (e.g. TikTok) or always-on,
-     * and screen is not pocket-locked.
+     * and screen is not pocket-locked or sleep blacked-out.
      */
     fun updateMiniControl() {
         if (shouldShowMiniControl()) {
@@ -497,7 +533,7 @@ class GestureAccessibilityService : AccessibilityService() {
 
     fun updateFloatingNav() {
         val shouldShow = GesturePoints.isFloatingNavEnabled(this) &&
-            !isLocked &&
+            !isLocked && !isSleepBlackout &&
             (isMiniControlAlwaysOn(this) || foregroundVideoApp != null)
         if (shouldShow) {
             floatingNavOverlay?.show()
@@ -515,12 +551,12 @@ class GestureAccessibilityService : AccessibilityService() {
     }
 
     /**
-     * Sleep timer ran out: remove pocket lock and go to the home screen. Leaving TikTok
-     * always pauses it (a tap could resume a paused video instead). The screen then times
-     * out and locks as usual.
+     * Sleep timer ran out: remove pocket lock & sleep blackout, and go to the home screen.
+     * Leaving TikTok always pauses it. The screen then times out and locks as usual.
      */
     fun sleepNow() {
         hideLock()
+        hideSleepBlackout()
         performGlobalAction(GLOBAL_ACTION_HOME)
     }
 
@@ -825,15 +861,23 @@ class GestureAccessibilityService : AccessibilityService() {
 
     private fun dispatch(gesture: GestureDescription, label: String) {
         val overlay = lockOverlay
-        if (overlay == null || !overlay.isShowing) {
+        val blackout = sleepBlackoutOverlay
+        val needPassThroughLock = overlay != null && overlay.isShowing
+        val needPassThroughBlackout = blackout != null && blackout.isShowing
+
+        if (!needPassThroughLock && !needPassThroughBlackout) {
             dispatchNow(gesture, label) {}
             return
         }
-        // Pocket lock is on: let this gesture fall through the overlay to TikTok.
-        overlay.beginPassThrough()
+        // Pocket lock or Sleep blackout is on: let this gesture fall through to TikTok.
+        if (needPassThroughLock) overlay?.beginPassThrough()
+        if (needPassThroughBlackout) blackout?.beginPassThrough()
         handler.postDelayed({
             dispatchNow(gesture, label) {
-                handler.postDelayed({ overlay.endPassThrough() }, PASS_THROUGH_RESTORE_MS)
+                handler.postDelayed({
+                    if (needPassThroughLock) overlay?.endPassThrough()
+                    if (needPassThroughBlackout) blackout?.endPassThrough()
+                }, PASS_THROUGH_RESTORE_MS)
             }
         }, PASS_THROUGH_SETTLE_MS)
     }

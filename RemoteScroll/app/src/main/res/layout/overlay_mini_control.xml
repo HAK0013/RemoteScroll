@@ -33,7 +33,7 @@
     <!-- ==================== EXPANDED CONTROL PANEL ==================== -->
     <LinearLayout
         android:id="@+id/layoutExpanded"
-        android:layout_width="264dp"
+        android:layout_width="282dp"
         android:layout_height="wrap_content"
         android:background="@drawable/bg_mini_panel"
         android:orientation="vertical"
@@ -85,7 +85,7 @@
                 android:textStyle="bold" />
         </LinearLayout>
 
-        <!-- PRIMARY ROW: AUTO-LOCK, 2X TURBO & POCKET LOCK -->
+        <!-- PRIMARY ROW: AUTO-LOCK, 2X TURBO, SLEEP & POCKET LOCK -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -103,39 +103,55 @@
                 android:gravity="center"
                 android:text="🎯 Auto: Off"
                 android:textColor="@color/console_text"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/btnTurbo2x"
                 android:layout_width="wrap_content"
                 android:layout_height="38dp"
-                android:layout_marginStart="6dp"
+                android:layout_marginStart="5dp"
                 android:background="@drawable/bg_mini_btn"
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center"
-                android:paddingStart="10dp"
-                android:paddingEnd="10dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
                 android:text="⏩ 2x"
                 android:textColor="@color/brand"
-                android:textSize="12sp"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnSleep"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/bg_mini_btn"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="🌙 Sleep"
+                android:textColor="#C084FC"
+                android:textSize="11sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/btnPocketLock"
                 android:layout_width="wrap_content"
                 android:layout_height="38dp"
-                android:layout_marginStart="6dp"
+                android:layout_marginStart="5dp"
                 android:background="@drawable/bg_mini_btn_accent"
                 android:clickable="true"
                 android:focusable="true"
                 android:gravity="center"
-                android:paddingStart="12dp"
-                android:paddingEnd="12dp"
+                android:paddingStart="10dp"
+                android:paddingEnd="10dp"
                 android:text="🔒 Lock"
                 android:textColor="#0B0F19"
-                android:textSize="12sp"
+                android:textSize="11sp"
                 android:textStyle="bold" />
         </LinearLayout>
 

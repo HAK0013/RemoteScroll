@@ -89,6 +89,7 @@ class MainActivity : AppCompatActivity() {
         setUpAutoLock()
         setUpMiniControl()
         setUpGesturePoints()
+        setUpSleepBlackout()
     }
 
     // ------------------------------------------------------------ sleep timer
@@ -394,6 +395,28 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun setUpSleepBlackout() {
+        findViewById<Button>(R.id.buttonStartSleepBlackout)?.setOnClickListener {
+            if (!GestureAccessibilityService.isEnabled(this)) {
+                Toast.makeText(this, R.string.toast_enable_accessibility, Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            if (!RemoteMediaService.isRunning) RemoteMediaService.start(this)
+            GestureAccessibilityService.instance?.showSleepBlackout()
+        }
+
+        findViewById<Button>(R.id.buttonOpenTikTokSleep)?.setOnClickListener {
+            openTikTok(locked = false, sleepBlackout = true)
+        }
+
+        findViewById<CheckBox>(R.id.checkSleepGestures)?.apply {
+            isChecked = SleepBlackoutOverlay.isSleepGesturesEnabled(this@MainActivity)
+            setOnCheckedChangeListener { _, isChecked ->
+                SleepBlackoutOverlay.setSleepGesturesEnabled(this@MainActivity, isChecked)
+            }
+        }
+    }
+
     private lateinit var textKeyLog: TextView
 
     /** Hold vs Press count, plus the Press count quiet-gap slider (100 ms steps). */
@@ -528,9 +551,10 @@ class MainActivity : AppCompatActivity() {
 
     /**
      * Starts the remote service (if needed) and opens the chosen video app. With [locked],
-     * pocket lock switches on once the app is in front.
+     * pocket lock switches on once the app is in front; with [sleepBlackout], Audio-Only
+     * sleep blackout switches on.
      */
-    private fun openTikTok(locked: Boolean) {
+    private fun openTikTok(locked: Boolean, sleepBlackout: Boolean = false) {
         if (!GestureAccessibilityService.isEnabled(this)) {
             Toast.makeText(this, R.string.toast_enable_accessibility, Toast.LENGTH_LONG).show()
             return
@@ -545,6 +569,10 @@ class MainActivity : AppCompatActivity() {
             // The accessibility service outlives this activity, so post on its side.
             Handler(Looper.getMainLooper()).postDelayed({
                 GestureAccessibilityService.instance?.showLock()
+            }, LOCK_DELAY_MS)
+        } else if (sleepBlackout) {
+            Handler(Looper.getMainLooper()).postDelayed({
+                GestureAccessibilityService.instance?.showSleepBlackout()
             }, LOCK_DELAY_MS)
         }
     }
