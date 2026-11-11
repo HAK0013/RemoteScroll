@@ -143,4 +143,20 @@
     <string name="sleep_blackout_help" formatted="false">Keeps video audio playing smoothly in the foreground while completely turning off the screen (100% true pitch black with 0% OLED light emission and lowest backlight). Perfect for listening in bed to stories, podcasts, interviews, or ASMR without draining battery or straining your eyes.</string>
     <string name="sleep_gestures_label">Touch gestures in darkness</string>
     <string name="sleep_gestures_help">Swipe Up/Down on the black screen to change videos in bed; Double-tap anywhere to wake; Single-tap for dim clock &amp; battery HUD.</string>
+
+    <!-- Hands-Free Auto-Pilot / Timed Auto-Scroll -->
+    <string name="auto_pilot_title">HANDS-FREE AUTO-PILOT (AUTO-SCROLL)</string>
+    <string name="auto_pilot_badge">LIVE COUNTDOWN</string>
+    <string name="auto_pilot_help">Automatically advances to the next video after your chosen timer. Shows a live countdown badge on screen. Manually swiping or pressing remote resets the timer back to full.</string>
+    <string name="auto_pilot_off">Off</string>
+    <string name="auto_pilot_15">15s</string>
+    <string name="auto_pilot_20">20s</string>
+    <string name="auto_pilot_30">30s</string>
+    <string name="auto_pilot_45">45s</string>
+    <string name="auto_pilot_custom">Custom</string>
+    <string name="auto_pilot_insert_label">Or insert seconds:</string>
+    <string name="auto_pilot_unit">sec</string>
+    <string name="auto_pilot_reset_label">Reset countdown on manual scroll</string>
+    <string name="auto_pilot_reset_help">Restarts the timer whenever you manually swipe or press Next/Back on your remote so new videos aren\'t cut short.</string>
+    <string name="auto_pilot_btn_launch">▶  Start Auto-Pilot &amp; Open %1$s</string>
 </resources>

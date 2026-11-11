@@ -103,6 +103,27 @@ class GestureAccessibilityService : AccessibilityService() {
                 .putInt(KEY_INACTIVITY_SLEEP_MINS, minutes.coerceAtLeast(0)).apply()
         }
 
+        private const val KEY_AUTO_PILOT_SECONDS = "auto_pilot_seconds"
+        private const val KEY_AUTO_PILOT_RESET_ON_SCROLL = "auto_pilot_reset_on_scroll"
+
+        fun autoPilotSeconds(context: Context): Int =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getInt(KEY_AUTO_PILOT_SECONDS, 0)
+
+        fun setAutoPilotSeconds(context: Context, seconds: Int) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putInt(KEY_AUTO_PILOT_SECONDS, seconds.coerceAtLeast(0)).apply()
+        }
+
+        fun isAutoPilotResetOnScroll(context: Context): Boolean =
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                .getBoolean(KEY_AUTO_PILOT_RESET_ON_SCROLL, true)
+
+        fun setAutoPilotResetOnScroll(context: Context, enabled: Boolean) {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit()
+                .putBoolean(KEY_AUTO_PILOT_RESET_ON_SCROLL, enabled).apply()
+        }
+
         /** Usual position of TikTok's bookmark (Save) icon, as a fraction of the screen. */
         // Measured from a 1152x2560 screenshot: bookmark icon centre at (1068, 1930).
         private const val SAVE_ICON_X = 0.927f
@@ -158,6 +179,21 @@ class GestureAccessibilityService : AccessibilityService() {
 
     val isLocked: Boolean get() = lockOverlay?.isShowing == true
     val isSleepBlackout: Boolean get() = sleepBlackoutOverlay?.isShowing == true
+
+    /** Auto-Pilot / Timed Auto-Scroll interval in seconds (0 = off). */
+    @Volatile
+    var autoPilotSeconds = 0
+        private set
+
+    @Volatile
+    var autoPilotRemaining = 0
+        private set
+
+    @Volatile
+    var isAutoPilotPaused = false
+        private set
+
+    val isAutoPilotActive: Boolean get() = autoPilotSeconds > 0
 
     /** Package of the app window in front (from window-state events), or null. */
     @Volatile
@@ -270,10 +306,13 @@ class GestureAccessibilityService : AccessibilityService() {
         floatingNavOverlay = FloatingNavOverlay(this)
         proximity = ProximityLock(this, onCovered = ::onPhoneCovered, onUncovered = ::onPhoneUncovered)
         updateProximity()
+        autoPilotSeconds = autoPilotSeconds(this)
+        autoPilotRemaining = autoPilotSeconds
         updateMiniControl()
         updateFloatingNav()
         registerBluetoothReceiver()
         handler.postDelayed(inactivityCheckRunnable, 30_000L)
+        handler.postDelayed(autoPilotTicker, 1_000L)
         scheduleAutoSkipCheck(800L)
         Log.i(TAG, "Accessibility service connected")
     }
@@ -408,10 +447,16 @@ class GestureAccessibilityService : AccessibilityService() {
             (type == AccessibilityEvent.TYPE_VIEW_CLICKED || type == AccessibilityEvent.TYPE_VIEW_SCROLLED)
         ) {
             noteUserActivity()
-            if (scrollCount > 0 && SystemClock.uptimeMillis() > injectingUntilUptimeMs) {
-                KeyLog.note("manual touch detected: reset scroll count from $scrollCount to 0")
-                scrollCount = 0
-                miniControlOverlay?.updateStatus(0, autoLockScrolls(this))
+            if (SystemClock.uptimeMillis() > injectingUntilUptimeMs) {
+                if (scrollCount > 0) {
+                    KeyLog.note("manual touch detected: reset scroll count from $scrollCount to 0")
+                    scrollCount = 0
+                    miniControlOverlay?.updateStatus(0, autoLockScrolls(this))
+                }
+                if (isAutoPilotActive && isAutoPilotResetOnScroll(this)) {
+                    autoPilotRemaining = autoPilotSeconds
+                    miniControlOverlay?.updateAutoPilot(autoPilotRemaining, autoPilotSeconds, isAutoPilotPaused)
+                }
             }
         }
     }
@@ -584,9 +629,14 @@ class GestureAccessibilityService : AccessibilityService() {
 
     /**
      * Increments the scroll counter and shows pocket lock automatically once the
-     * user-configured threshold is reached.
+     * user-configured threshold is reached. Also resets Auto-Pilot countdown if enabled.
      */
     private fun onScrolled() {
+        if (isAutoPilotActive && isAutoPilotResetOnScroll(this)) {
+            autoPilotRemaining = autoPilotSeconds
+            miniControlOverlay?.updateAutoPilot(autoPilotRemaining, autoPilotSeconds, isAutoPilotPaused)
+        }
+
         val threshold = autoLockScrolls(this)
         miniControlOverlay?.updateStatus(scrollCount + 1, threshold)
         if (isLocked) return                  // already locked, nothing to do
@@ -599,6 +649,71 @@ class GestureAccessibilityService : AccessibilityService() {
             scrollCount = 0
             showLock()
         }
+    }
+
+    // ------------------------------------------------------------- auto-pilot / timed auto-scroll
+
+    private val autoPilotTicker = object : Runnable {
+        override fun run() {
+            tickAutoPilot()
+            handler.postDelayed(this, 1000L)
+        }
+    }
+
+    private fun tickAutoPilot() {
+        if (autoPilotSeconds <= 0 || isAutoPilotPaused || isLocked) {
+            return
+        }
+        // Only tick when in video app or always-on
+        if (!isMiniControlAlwaysOn(this) && foregroundVideoApp == null) {
+            return
+        }
+
+        autoPilotRemaining--
+        if (autoPilotRemaining <= 0) {
+            autoPilotRemaining = autoPilotSeconds
+            swipeUp()
+            KeyLog.note("auto-pilot: auto-scrolled to next video")
+        }
+        miniControlOverlay?.updateAutoPilot(autoPilotRemaining, autoPilotSeconds, isAutoPilotPaused)
+    }
+
+    fun startAutoPilot(seconds: Int) {
+        autoPilotSeconds = seconds
+        autoPilotRemaining = seconds
+        isAutoPilotPaused = false
+        setAutoPilotSeconds(this, seconds)
+        miniControlOverlay?.updateAutoPilot(autoPilotRemaining, autoPilotSeconds, isAutoPilotPaused)
+        KeyLog.note("auto-pilot: started ($seconds s interval)")
+    }
+
+    fun stopAutoPilot() {
+        autoPilotSeconds = 0
+        autoPilotRemaining = 0
+        isAutoPilotPaused = false
+        setAutoPilotSeconds(this, 0)
+        miniControlOverlay?.updateAutoPilot(0, 0, false)
+        KeyLog.note("auto-pilot: stopped")
+    }
+
+    fun toggleAutoPilotPause() {
+        if (!isAutoPilotActive) return
+        isAutoPilotPaused = !isAutoPilotPaused
+        miniControlOverlay?.updateAutoPilot(autoPilotRemaining, autoPilotSeconds, isAutoPilotPaused)
+        KeyLog.note(if (isAutoPilotPaused) "auto-pilot: paused" else "auto-pilot: resumed")
+        Toast.makeText(this, if (isAutoPilotPaused) "⏸️ Auto-Pilot Paused" else "▶️ Auto-Pilot Resumed", Toast.LENGTH_SHORT).show()
+    }
+
+    fun cycleAutoPilot() {
+        val next = when (autoPilotSeconds) {
+            0 -> 15
+            15 -> 20
+            20 -> 30
+            30 -> 45
+            else -> 0
+        }
+        if (next > 0) startAutoPilot(next) else stopAutoPilot()
+        Toast.makeText(this, if (next > 0) "▶️ Auto-Pilot: ${next}s" else "⏹️ Auto-Pilot Off", Toast.LENGTH_SHORT).show()
     }
 
     /** Tap at calibrated tap point: TikTok pauses/resumes. */

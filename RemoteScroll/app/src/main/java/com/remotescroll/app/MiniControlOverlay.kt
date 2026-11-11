@@ -50,6 +50,7 @@ class MiniControlOverlay(private val service: GestureAccessibilityService) {
     private var layoutExpanded: View? = null
     private var textBubbleStatus: TextView? = null
     private var btnAutoLock: TextView? = null
+    private var btnAutoPilot: TextView? = null
 
     private var isExpanded = false
     private var lastX = DEFAULT_X
@@ -78,6 +79,7 @@ class MiniControlOverlay(private val service: GestureAccessibilityService) {
         val collapsed = view.findViewById<View>(R.id.layoutCollapsed)
         val expanded = view.findViewById<View>(R.id.layoutExpanded)
         val bubbleStatus = view.findViewById<TextView>(R.id.textBubbleStatus)
+        val autoPilotBtn = view.findViewById<TextView>(R.id.btnAutoPilot)
         val autoBtn = view.findViewById<TextView>(R.id.btnAutoLock)
         val turboBtn = view.findViewById<TextView>(R.id.btnTurbo2x)
         val sleepBtn = view.findViewById<View>(R.id.btnSleep)
@@ -93,7 +95,18 @@ class MiniControlOverlay(private val service: GestureAccessibilityService) {
         layoutCollapsed = collapsed
         layoutExpanded = expanded
         textBubbleStatus = bubbleStatus
+        btnAutoPilot = autoPilotBtn
         btnAutoLock = autoBtn
+
+        // Buttons
+        autoPilotBtn?.setOnClickListener {
+            service.cycleAutoPilot()
+        }
+
+        autoPilotBtn?.setOnLongClickListener {
+            service.toggleAutoPilotPause()
+            true
+        }
 
         // Buttons
         sleepBtn?.setOnClickListener {
@@ -203,17 +216,48 @@ class MiniControlOverlay(private val service: GestureAccessibilityService) {
         hide()
     }
 
+    fun updateAutoPilot(remainingSeconds: Int, totalSeconds: Int, isPaused: Boolean) {
+        handler.post {
+            val bubble = textBubbleStatus
+            val autoPilotBtn = btnAutoPilot
+            if (totalSeconds > 0) {
+                val status = if (isPaused) "⏸️ ${remainingSeconds}s" else "▶ ${remainingSeconds}s"
+                val color = if (isPaused) android.graphics.Color.parseColor("#F59E0B") else android.graphics.Color.parseColor("#00D2FF")
+                bubble?.text = status
+                bubble?.setTextColor(color)
+                autoPilotBtn?.text = if (isPaused) "⏸️ ${remainingSeconds}s" else "▶ ${remainingSeconds}s"
+                autoPilotBtn?.setTextColor(color)
+            } else {
+                autoPilotBtn?.text = "▶ Auto: Off"
+                autoPilotBtn?.setTextColor(android.graphics.Color.parseColor("#00D2FF"))
+                updateStatus(service.scrollCount, GestureAccessibilityService.autoLockScrolls(service))
+            }
+        }
+    }
+
     fun updateStatus(scrollCount: Int, autoLockThreshold: Int) {
         handler.post {
             val bubble = textBubbleStatus ?: return@post
             val autoBtn = btnAutoLock ?: return@post
 
-            if (autoLockThreshold > 0) {
-                bubble.text = "⚡ $scrollCount/$autoLockThreshold"
-                autoBtn.text = "🎯 $scrollCount/$autoLockThreshold"
+            if (service.isAutoPilotActive) {
+                val rem = service.autoPilotRemaining
+                val paused = service.isAutoPilotPaused
+                bubble.text = if (paused) "⏸️ ${rem}s" else "▶ ${rem}s"
+                bubble.setTextColor(if (paused) android.graphics.Color.parseColor("#F59E0B") else android.graphics.Color.parseColor("#00D2FF"))
             } else {
-                bubble.text = "⚡ RS"
-                autoBtn.text = "🎯 Auto: Off"
+                if (autoLockThreshold > 0) {
+                    bubble.text = "⚡ $scrollCount/$autoLockThreshold"
+                } else {
+                    bubble.text = "⚡ RS"
+                }
+                bubble.setTextColor(android.graphics.Color.parseColor("#00D2FF"))
+            }
+
+            if (autoLockThreshold > 0) {
+                autoBtn.text = "🎯 Lock: $scrollCount/$autoLockThreshold"
+            } else {
+                autoBtn.text = "🎯 Lock: Off"
             }
         }
     }

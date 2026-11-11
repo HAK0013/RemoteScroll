@@ -87,6 +87,7 @@ class MainActivity : AppCompatActivity() {
         setUpVideoApp()
         setUpAutomatic()
         setUpAutoLock()
+        setUpAutoPilot()
         setUpMiniControl()
         setUpGesturePoints()
         setUpSleepBlackout()
@@ -307,6 +308,107 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         })
+    }
+
+    // ------------------------------------------------------------ auto-pilot / timed auto-scroll
+
+    private fun setUpAutoPilot() {
+        val radio = findViewById<RadioGroup>(R.id.radioAutoPilot) ?: return
+        val edit = findViewById<EditText>(R.id.editAutoPilotSeconds)
+        val customLayout = findViewById<android.view.View>(R.id.layoutAutoPilotCustom)
+        val resetCheck = findViewById<CheckBox>(R.id.checkAutoPilotReset)
+        val startBtn = findViewById<Button>(R.id.buttonStartAutoPilot)
+        var updating = false
+
+        val current = GestureAccessibilityService.autoPilotSeconds(this)
+        edit?.setText(if (current > 0) current.toString() else "20")
+
+        fun updateRadio(seconds: Int) {
+            updating = true
+            when (seconds) {
+                0 -> {
+                    radio.check(R.id.autoPilotOff)
+                    customLayout?.visibility = android.view.View.GONE
+                }
+                15 -> {
+                    radio.check(R.id.autoPilot15)
+                    customLayout?.visibility = android.view.View.GONE
+                }
+                20 -> {
+                    radio.check(R.id.autoPilot20)
+                    customLayout?.visibility = android.view.View.GONE
+                }
+                30 -> {
+                    radio.check(R.id.autoPilot30)
+                    customLayout?.visibility = android.view.View.GONE
+                }
+                else -> {
+                    radio.check(R.id.autoPilotCustom)
+                    customLayout?.visibility = android.view.View.VISIBLE
+                }
+            }
+            updating = false
+        }
+
+        updateRadio(current)
+
+        radio.setOnCheckedChangeListener { _, checkedId ->
+            if (updating) return@setOnCheckedChangeListener
+            val newSeconds = when (checkedId) {
+                R.id.autoPilotOff -> 0
+                R.id.autoPilot15 -> 15
+                R.id.autoPilot20 -> 20
+                R.id.autoPilot30 -> 30
+                R.id.autoPilotCustom -> edit?.text?.toString()?.toIntOrNull()?.takeIf { it > 0 } ?: 20
+                else -> 0
+            }
+            customLayout?.visibility = if (checkedId == R.id.autoPilotCustom) android.view.View.VISIBLE else android.view.View.GONE
+            if (checkedId == R.id.autoPilotCustom) {
+                edit?.requestFocus()
+            }
+            updating = true
+            if (newSeconds > 0) edit?.setText(newSeconds.toString())
+            updating = false
+
+            GestureAccessibilityService.setAutoPilotSeconds(this, newSeconds)
+            GestureAccessibilityService.instance?.let { service ->
+                if (newSeconds > 0) {
+                    service.startAutoPilot(newSeconds)
+                } else {
+                    service.stopAutoPilot()
+                }
+            }
+        }
+
+        edit?.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
+            override fun afterTextChanged(s: Editable?) {
+                if (updating) return
+                val seconds = s?.toString()?.trim()?.toIntOrNull() ?: 0
+                if (radio.checkedRadioButtonId == R.id.autoPilotCustom) {
+                    GestureAccessibilityService.setAutoPilotSeconds(this@MainActivity, seconds)
+                    GestureAccessibilityService.instance?.let { service ->
+                        if (seconds > 0) service.startAutoPilot(seconds) else service.stopAutoPilot()
+                    }
+                }
+            }
+        })
+
+        resetCheck?.apply {
+            isChecked = GestureAccessibilityService.isAutoPilotResetOnScroll(this@MainActivity)
+            setOnCheckedChangeListener { _, isChecked ->
+                GestureAccessibilityService.setAutoPilotResetOnScroll(this@MainActivity, isChecked)
+            }
+        }
+
+        startBtn?.setOnClickListener {
+            val seconds = GestureAccessibilityService.autoPilotSeconds(this@MainActivity)
+            val effectiveSeconds = if (seconds > 0) seconds else 20
+            GestureAccessibilityService.setAutoPilotSeconds(this@MainActivity, effectiveSeconds)
+            GestureAccessibilityService.instance?.startAutoPilot(effectiveSeconds)
+            openTikTok(locked = false)
+        }
     }
 
     // ------------------------------------------------------------ floating mini control
