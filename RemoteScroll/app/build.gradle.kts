@@ -11,8 +11,8 @@ android {
         applicationId = "com.remotescroll.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 23
-        versionName = "3.2"
+        versionCode = 42
+        versionName = "5.2"
     }
 
     // APK file name carries the version, e.g. RemoteScroll-v1.1.apk
@@ -50,4 +50,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.media:media:1.7.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    testImplementation("junit:junit:4.13.2")
 }

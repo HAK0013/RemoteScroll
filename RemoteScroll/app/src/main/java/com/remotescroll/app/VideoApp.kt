@@ -47,13 +47,17 @@ enum class VideoApp(
     );
 
     /** @return true if the app was found and started. */
-    fun launch(context: Context): Boolean {
+    fun launch(context: Context, openFeed: Boolean = true): Boolean {
         val pm = context.packageManager
         for (pkg in packages) {
             if (pm.getLaunchIntentForPackage(pkg) == null) continue // not installed
-            val feed = feedUri?.let {
-                Intent(Intent.ACTION_VIEW, Uri.parse(it)).setPackage(pkg)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val feed = if (openFeed) {
+                feedUri?.let {
+                    Intent(Intent.ACTION_VIEW, Uri.parse(it)).setPackage(pkg)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+            } else {
+                null
             }
             try {
                 if (feed != null) {

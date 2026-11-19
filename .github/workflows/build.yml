@@ -37,3 +37,27 @@ jobs:
         with:
           name: app-debug
           path: RemoteScroll/app/build/outputs/apk/debug/*.apk
+
+      - name: Upload APK to Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
+            echo "Skipping Telegram upload: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID secret is not set."
+            exit 0
+          fi
+          APK_FILE=$(ls -t app/build/outputs/apk/debug/*.apk 2>/dev/null | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            echo "No APK found in app/build/outputs/apk/debug/"
+            exit 1
+          fi
+          FILENAME=$(basename "$APK_FILE")
+          COMMIT_MSG=$(git log -1 --pretty=%s)
+          CAPTION=$(printf 'RemoteScroll APK Update: %s\nCommit: %s - %s' "$FILENAME" "${GITHUB_SHA:0:7}" "$COMMIT_MSG")
+          RESPONSE=$(curl -sS -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendDocument" \
+            -F "chat_id=${TELEGRAM_CHAT_ID}" \
+            -F "document=@${APK_FILE}" \
+            -F "caption=${CAPTION}")
+          echo "$RESPONSE" | grep -q '"ok":true' || { echo "Telegram upload failed: $RESPONSE"; exit 1; }
+          echo "Uploaded ${FILENAME} to Telegram."

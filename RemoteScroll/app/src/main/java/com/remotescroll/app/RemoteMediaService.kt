@@ -74,7 +74,12 @@ class RemoteMediaService : Service() {
             instance?.updateNotification()
         }
 
-        fun start(context: Context) {
+        /**
+         * @param byUser false when [AutoStart] starts it by itself. A start by the user
+         *   clears an earlier manual Stop, so auto-start works again afterwards.
+         */
+        fun start(context: Context, byUser: Boolean = true) {
+            if (byUser) AutoStart.clearStoppedByUser(context)
             ContextCompat.startForegroundService(
                 context,
                 Intent(context, RemoteMediaService::class.java)
@@ -105,6 +110,8 @@ class RemoteMediaService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
+            // Stop from the notification: auto-start must not bring it straight back.
+            AutoStart.markStoppedByUser(this)
             stopSelf()
             return START_NOT_STICKY
         }

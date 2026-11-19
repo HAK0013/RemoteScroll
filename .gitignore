@@ -1,0 +1,4 @@
+# Local Telegram credentials for APK upload script (never commit)
+.telegram.env
+.env
+.env.*

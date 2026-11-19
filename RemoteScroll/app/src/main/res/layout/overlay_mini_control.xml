@@ -233,6 +233,101 @@
                 android:textColor="@color/brand"
                 android:textSize="10sp" />
         </LinearLayout>
+
+        <!-- YOUTUBE AD SKIPPER ROW -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btnYtSkipAds"
+                android:layout_width="0dp"
+                android:layout_height="30dp"
+                android:layout_weight="1.2"
+                android:background="@drawable/bg_mini_btn"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="⏭️ YT Ads: ON"
+                android:textColor="@color/brand"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnYtMuteAds"
+                android:layout_width="0dp"
+                android:layout_height="30dp"
+                android:layout_marginStart="5dp"
+                android:layout_weight="1.0"
+                android:background="@drawable/bg_mini_btn"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="🔇 Mute: OFF"
+                android:textColor="@color/console_text"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/textYtSkipCounter"
+                android:layout_width="wrap_content"
+                android:layout_height="30dp"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/bg_status_badge"
+                android:gravity="center"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:text="0 ads"
+                android:textColor="@color/brand"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="5dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btnYtTranslate"
+                android:layout_width="0dp"
+                android:layout_height="30dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_mini_btn"
+                android:clickable="true"
+                android:focusable="true"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:singleLine="true"
+                android:text="🇰🇭 Translate: OFF"
+                android:textColor="#94A3B8"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnYtTranslateVoice"
+                android:layout_width="wrap_content"
+                android:layout_height="30dp"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/bg_mini_btn"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:singleLine="true"
+                android:text="🔇 Voice"
+                android:textColor="#94A3B8"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </LinearLayout>
 
 </FrameLayout>

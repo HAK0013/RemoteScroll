@@ -11,18 +11,25 @@ import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.format.DateFormat
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.RadioGroup
 import android.widget.SeekBar
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
+import android.graphics.Color
+import android.view.View
+import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -60,6 +67,7 @@ class MainActivity : AppCompatActivity() {
 
         buttonToggleService.setOnClickListener {
             if (RemoteMediaService.isRunning) {
+                AutoStart.markStoppedByUser(this)
                 RemoteMediaService.stop(this)
                 refreshStatusSoon()
             } else {
@@ -85,6 +93,8 @@ class MainActivity : AppCompatActivity() {
         setUpInactivitySleep()
         findViewById<Button>(R.id.buttonChooseRemotes).setOnClickListener { chooseRemotes() }
         setUpVideoApp()
+        setUpYouTubeAutoSkip()
+        setUpYouTubeTranslator()
         setUpAutomatic()
         setUpAutoLock()
         setUpAutoPilot()
@@ -218,6 +228,15 @@ class MainActivity : AppCompatActivity() {
     // ------------------------------------------------------------ automatic
 
     private fun setUpAutomatic() {
+        findViewById<CheckBox>(R.id.checkAutoStartOnOpen).apply {
+            isChecked = AutoStart.isAlwaysOn(this@MainActivity)
+            setOnCheckedChangeListener { _, on ->
+                AutoStart.setAlwaysOn(this@MainActivity, on)
+                if (on && !GestureAccessibilityService.isEnabled(this@MainActivity)) {
+                    Toast.makeText(this@MainActivity, R.string.toast_enable_accessibility, Toast.LENGTH_LONG).show()
+                }
+            }
+        }
         findViewById<CheckBox>(R.id.checkAutoStart).apply {
             isChecked = AutoStart.isEnabled(this@MainActivity)
             setOnCheckedChangeListener { _, on ->
@@ -436,10 +455,73 @@ class MainActivity : AppCompatActivity() {
             setOnCheckedChangeListener { _, isChecked ->
                 GestureAccessibilityService.setAutoSkipAdsEnabled(this@MainActivity, isChecked)
                 if (isChecked) {
-                    GestureAccessibilityService.instance?.scheduleAutoSkipCheck(300L)
+                    GestureAccessibilityService.instance?.scheduleAutoSkipCheck(300L, force = true)
                 }
             }
         }
+    }
+
+    // ------------------------------------------------------------ YouTube auto-skip ads
+
+    private var updatingYouTubeUi = false
+
+    private fun setUpYouTubeAutoSkip() {
+        findViewById<CheckBox>(R.id.checkYtAutoSkip)?.setOnCheckedChangeListener { _, isChecked ->
+            if (updatingYouTubeUi) return@setOnCheckedChangeListener
+            YouTubeAdSkipper.setEnabled(this, isChecked)
+            if (isChecked && !GestureAccessibilityService.isEnabled(this)) {
+                Toast.makeText(this, R.string.toast_enable_accessibility, Toast.LENGTH_LONG).show()
+            }
+            GestureAccessibilityService.instance?.refreshYouTubeAdSettings()
+        }
+
+        findViewById<CheckBox>(R.id.checkYtMuteAds)?.setOnCheckedChangeListener { _, isChecked ->
+            if (updatingYouTubeUi) return@setOnCheckedChangeListener
+            YouTubeAdSkipper.setMuteAdsEnabled(this, isChecked)
+            GestureAccessibilityService.instance?.refreshYouTubeAdSettings()
+        }
+
+        findViewById<Button>(R.id.buttonOpenYouTubeRegular)?.setOnClickListener {
+            if (!GestureAccessibilityService.isEnabled(this)) {
+                Toast.makeText(this, R.string.toast_enable_accessibility, Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
+            if (!RemoteMediaService.isRunning) RemoteMediaService.start(this)
+            if (!VideoApp.YOUTUBE.launch(this, openFeed = false)) {
+                Toast.makeText(this, R.string.yt_missing, Toast.LENGTH_LONG).show()
+            }
+        }
+
+        findViewById<CheckBox>(R.id.checkFbAutoSkip)?.setOnCheckedChangeListener { _, isChecked ->
+            if (updatingYouTubeUi) return@setOnCheckedChangeListener
+            FacebookAdSkipper.setEnabled(this, isChecked)
+            if (isChecked && !GestureAccessibilityService.isEnabled(this)) {
+                Toast.makeText(this, R.string.toast_enable_accessibility, Toast.LENGTH_LONG).show()
+            }
+        }
+
+        findViewById<Button>(R.id.buttonResetYtSkipCount)?.setOnClickListener {
+            YouTubeAdSkipper.resetSkippedCount(this)
+            refreshYouTubeAutoSkip()
+            GestureAccessibilityService.instance?.refreshYouTubeAdSettings()
+        }
+
+        refreshYouTubeAutoSkip()
+    }
+
+    private fun refreshYouTubeAutoSkip() {
+        updatingYouTubeUi = true
+        findViewById<CheckBox>(R.id.checkYtAutoSkip)?.isChecked =
+            YouTubeAdSkipper.isEnabled(this)
+        findViewById<CheckBox>(R.id.checkYtMuteAds)?.isChecked =
+            YouTubeAdSkipper.isMuteAdsEnabled(this)
+        findViewById<CheckBox>(R.id.checkFbAutoSkip)?.isChecked =
+            FacebookAdSkipper.isEnabled(this)
+        updatingYouTubeUi = false
+
+        val count = YouTubeAdSkipper.skippedCount(this)
+        findViewById<TextView>(R.id.textYtSkippedBadge)?.text =
+            getString(R.string.yt_auto_skip_badge, count)
     }
 
     private fun setUpInactivitySleep() {
@@ -644,10 +726,353 @@ class MainActivity : AppCompatActivity() {
         textKeyLog.text = text.ifEmpty { getString(R.string.remote_test_empty) }
     }
 
+    private var syncingTranslatorUi = false
+
+    private val freeSourceLangs = listOf(
+        TranslatorPrefs.LANG_AUTO to "Auto-Detect (Android 13+ / Captions)",
+        "en-US" to "English (en-US)",
+        "zh-CN" to "Chinese Mandarin (zh-CN)",
+        "th-TH" to "Thai (th-TH)",
+        "ja-JP" to "Japanese (ja-JP)",
+        "ko-KR" to "Korean (ko-KR)",
+        "vi-VN" to "Vietnamese (vi-VN)",
+        "fr-FR" to "French (fr-FR)",
+        "es-ES" to "Spanish (es-ES)",
+        "id-ID" to "Indonesian (id-ID)",
+        "hi-IN" to "Hindi (hi-IN)",
+        "ar-SA" to "Arabic (ar-SA)",
+        "ru-RU" to "Russian (ru-RU)"
+    )
+
+    private fun setUpYouTubeTranslator() {
+        val checkSubtitles = findViewById<CheckBox>(R.id.checkYtTranslateSubtitles)
+        val checkVoice = findViewById<CheckBox>(R.id.checkYtTranslateVoice)
+        val checkAudioTrack = findViewById<CheckBox>(R.id.checkYtAudioTrackMode)
+        val checkMuteOrig = findViewById<CheckBox>(R.id.checkYtAudioTrackMuteOrig)
+        val textTtsVolume = findViewById<TextView>(R.id.textYtTtsVolumeLabel)
+        val seekTtsVolume = findViewById<SeekBar>(R.id.seekYtTtsVolume)
+        val textTtsSpeed = findViewById<TextView>(R.id.textYtTtsSpeedLabel)
+        val seekTtsSpeed = findViewById<SeekBar>(R.id.seekYtTtsSpeed)
+        val radioVoiceGender = findViewById<RadioGroup>(R.id.radioYtVoiceGender)
+        val radioVoiceTone = findViewById<RadioGroup>(R.id.radioYtVoiceTone)
+        val checkShowOriginal = findViewById<CheckBox>(R.id.checkYtTranslateShowOriginal)
+        val checkOnlyYt = findViewById<CheckBox>(R.id.checkYtTranslateOnlyYt)
+        val editApiKey = findViewById<EditText>(R.id.editGeminiApiKey)
+        val btnSaveKey = findViewById<Button>(R.id.buttonSaveGeminiKey)
+        val spinnerLang = findViewById<Spinner>(R.id.spinnerYtSourceLang)
+        val btnToggleLive = findViewById<Button>(R.id.buttonToggleYtLiveTranslate)
+        val btnRestartTts = findViewById<Button>(R.id.buttonRestartTtsDetect)
+
+        val initVol = TranslatorPrefs.getTtsVolumePercent(this)
+        textTtsVolume.text = "Khmer Voice Volume: $initVol%"
+        seekTtsVolume.max = 90
+        seekTtsVolume.progress = (initVol - 10).coerceIn(0, 90)
+        seekTtsVolume.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                val vol = (progress + 10).coerceIn(10, 100)
+                textTtsVolume.text = "Khmer Voice Volume: $vol%"
+                if (!fromUser || syncingTranslatorUi) return
+                TranslatorPrefs.setTtsVolumePercent(this@MainActivity, vol)
+                GestureAccessibilityService.instance?.updateKhmerTtsVolume()
+            }
+
+            override fun onStartTrackingTouch(bar: SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: SeekBar) = Unit
+        })
+
+        val initSpeed = TranslatorPrefs.getTtsSpeed(this)
+        textTtsSpeed.text = String.format(Locale.US, "Khmer Voice Speed: %.2fx", initSpeed)
+        seekTtsSpeed.max = 24 // 1.00x .. 2.20x in 0.05x steps
+        seekTtsSpeed.progress = ((initSpeed - 1.0f) / 0.05f).toInt().coerceIn(0, 24)
+        seekTtsSpeed.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
+                val speed = (1.0f + progress * 0.05f).coerceIn(1.0f, 2.2f)
+                textTtsSpeed.text = String.format(Locale.US, "Khmer Voice Speed: %.2fx", speed)
+                if (!fromUser || syncingTranslatorUi) return
+                TranslatorPrefs.setTtsSpeed(this@MainActivity, speed)
+                GestureAccessibilityService.instance?.updateKhmerTtsSpeed()
+            }
+
+            override fun onStartTrackingTouch(bar: SeekBar) = Unit
+            override fun onStopTrackingTouch(bar: SeekBar) = Unit
+        })
+
+        radioVoiceGender.setOnCheckedChangeListener { _, checkedId ->
+            if (syncingTranslatorUi) return@setOnCheckedChangeListener
+            val mode = when (checkedId) {
+                R.id.radioVoiceFemale -> TranslatorPrefs.GENDER_MODE_FEMALE
+                R.id.radioVoiceMale -> TranslatorPrefs.GENDER_MODE_MALE
+                else -> TranslatorPrefs.GENDER_MODE_AUTO
+            }
+            TranslatorPrefs.setVoiceGenderMode(this, mode)
+        }
+
+        radioVoiceTone.setOnCheckedChangeListener { _, checkedId ->
+            if (syncingTranslatorUi) return@setOnCheckedChangeListener
+            val mode = when (checkedId) {
+                R.id.radioToneWarm -> TranslatorPrefs.TONE_MODE_WARM
+                R.id.radioToneLively -> TranslatorPrefs.TONE_MODE_LIVELY
+                R.id.radioToneFlat -> TranslatorPrefs.TONE_MODE_FLAT
+                else -> TranslatorPrefs.TONE_MODE_NATURAL
+            }
+            TranslatorPrefs.setVoiceToneMode(this, mode)
+        }
+
+        editApiKey.setText(TranslatorPrefs.getGeminiApiKey(this))
+
+        val labels = freeSourceLangs.map { it.second }
+        val adapter = object : ArrayAdapter<String>(
+            this,
+            android.R.layout.simple_spinner_item,
+            labels
+        ) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val tv = super.getView(position, convertView, parent) as TextView
+                tv.setTextColor(Color.parseColor("#F8FAFC"))
+                tv.textSize = 13f
+                return tv
+            }
+
+            override fun getDropDownView(position: Int, convertView: View?, parent: ViewGroup): View {
+                val tv = super.getDropDownView(position, convertView, parent) as TextView
+                tv.setBackgroundColor(Color.parseColor("#151C2C"))
+                tv.setTextColor(Color.parseColor("#F8FAFC"))
+                tv.textSize = 13f
+                val pad = (12 * resources.displayMetrics.density).toInt()
+                tv.setPadding(pad, pad, pad, pad)
+                return tv
+            }
+        }
+        spinnerLang.adapter = adapter
+
+        checkSubtitles.setOnCheckedChangeListener { _, checked ->
+            if (syncingTranslatorUi) return@setOnCheckedChangeListener
+            TranslatorPrefs.setSubtitleEnabled(this, checked)
+            GestureAccessibilityService.instance?.updateKhmerSubtitleOverlay()
+            GestureAccessibilityService.instance?.refreshTranslatorUiState()
+            refreshYouTubeTranslator()
+        }
+
+        checkVoice.setOnCheckedChangeListener { _, checked ->
+            if (syncingTranslatorUi) return@setOnCheckedChangeListener
+            TranslatorPrefs.setVoiceTtsEnabled(this, checked)
+            if (!checked) {
+                GestureAccessibilityService.instance?.stopKhmerVoice()
+            }
+            GestureAccessibilityService.instance?.refreshTranslatorUiState()
+            refreshYouTubeTranslator()
+        }
+
+        checkAudioTrack.setOnCheckedChangeListener { _, checked ->
+            if (syncingTranslatorUi) return@setOnCheckedChangeListener
+            TranslatorPrefs.setAudioTrackModeEnabled(this, checked)
+            GestureAccessibilityService.instance?.refreshTranslatorUiState()
+            refreshYouTubeTranslator()
+        }
+
+        checkMuteOrig.setOnCheckedChangeListener { _, checked ->
+            if (syncingTranslatorUi) return@setOnCheckedChangeListener
+            TranslatorPrefs.setAudioTrackMuteOrigEnabled(this, checked)
+            GestureAccessibilityService.instance?.refreshTranslatorUiState()
+            refreshYouTubeTranslator()
+        }
+
+        checkShowOriginal.setOnCheckedChangeListener { _, checked ->
+            if (syncingTranslatorUi) return@setOnCheckedChangeListener
+            TranslatorPrefs.setShowOriginalEnabled(this, checked)
+            GestureAccessibilityService.instance?.updateKhmerSubtitleOverlay()
+        }
+
+        checkOnlyYt.setOnCheckedChangeListener { _, checked ->
+            if (syncingTranslatorUi) return@setOnCheckedChangeListener
+            TranslatorPrefs.setOnlyYouTube(this, checked)
+            GestureAccessibilityService.instance?.updateKhmerSubtitleOverlay()
+        }
+
+        btnSaveKey.setOnClickListener {
+            val raw = editApiKey.text?.toString()?.trim().orEmpty()
+            TranslatorPrefs.setGeminiApiKey(this, raw)
+            KhmerTranslatorClient.resetCooldowns()
+            YouTubeTranslatorService.clearQuotaCooldown()
+            editApiKey.clearFocus()
+            Toast.makeText(
+                this,
+                if (raw.isNotEmpty()) getString(R.string.yt_translate_key_saved)
+                else getString(R.string.yt_translate_key_cleared),
+                Toast.LENGTH_SHORT
+            ).show()
+            refreshYouTubeTranslator()
+        }
+
+        spinnerLang.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(
+                parent: AdapterView<*>?,
+                view: View?,
+                position: Int,
+                id: Long
+            ) {
+                if (syncingTranslatorUi) return
+                val code = freeSourceLangs.getOrNull(position)?.first ?: TranslatorPrefs.LANG_AUTO
+                TranslatorPrefs.setFreeSourceLang(this@MainActivity, code)
+                refreshYouTubeTranslator()
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+        }
+
+        btnToggleLive.setOnClickListener {
+            if (YouTubeTranslatorService.isRunning) {
+                YouTubeTranslatorService.stop(this)
+                refreshYouTubeTranslator()
+                return@setOnClickListener
+            }
+
+            val typedKey = editApiKey.text?.toString()?.trim().orEmpty()
+            if (typedKey != TranslatorPrefs.getGeminiApiKey(this)) {
+                TranslatorPrefs.setGeminiApiKey(this, typedKey)
+            }
+            KhmerTranslatorClient.resetCooldowns()
+            YouTubeTranslatorService.clearQuotaCooldown()
+            if (!TranslatorPrefs.isSubtitleEnabled(this) && !TranslatorPrefs.isVoiceTtsEnabled(this)) {
+                TranslatorPrefs.setSubtitleEnabled(this, true)
+            }
+            if (GestureAccessibilityService.instance == null) {
+                Toast.makeText(
+                    this,
+                    "Tip: Enable RemoteScroll Accessibility Service to show floating subtitles over YouTube.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+            GestureAccessibilityService.instance?.updateKhmerSubtitleOverlay()
+            MediaProjectionPromptActivity.launch(this, openYouTubeAfterConsent = true)
+        }
+
+        btnRestartTts.setOnClickListener {
+            val svc = GestureAccessibilityService.instance
+            if (svc != null) {
+                svc.restartTtsAndLiveDetection()
+            } else {
+                YouTubeTranslatorService.restartRealtimeDetection()
+            }
+            Toast.makeText(this, "🔄 Restarted TTS Detection & Live Real-Time Sync", Toast.LENGTH_SHORT).show()
+            refreshYouTubeTranslator()
+        }
+
+        refreshYouTubeTranslator()
+    }
+
+    private fun refreshYouTubeTranslator() {
+        val badge = findViewById<TextView>(R.id.textYtTranslateStatusBadge) ?: return
+        val checkSubtitles = findViewById<CheckBox>(R.id.checkYtTranslateSubtitles) ?: return
+        val checkVoice = findViewById<CheckBox>(R.id.checkYtTranslateVoice) ?: return
+        val checkAudioTrack = findViewById<CheckBox>(R.id.checkYtAudioTrackMode)
+        val checkMuteOrig = findViewById<CheckBox>(R.id.checkYtAudioTrackMuteOrig)
+        val textTtsVolume = findViewById<TextView>(R.id.textYtTtsVolumeLabel)
+        val seekTtsVolume = findViewById<SeekBar>(R.id.seekYtTtsVolume)
+        val textTtsSpeed = findViewById<TextView>(R.id.textYtTtsSpeedLabel)
+        val seekTtsSpeed = findViewById<SeekBar>(R.id.seekYtTtsSpeed)
+        val radioVoiceGender = findViewById<RadioGroup>(R.id.radioYtVoiceGender)
+        val radioVoiceTone = findViewById<RadioGroup>(R.id.radioYtVoiceTone)
+        val checkShowOriginal = findViewById<CheckBox>(R.id.checkYtTranslateShowOriginal) ?: return
+        val checkOnlyYt = findViewById<CheckBox>(R.id.checkYtTranslateOnlyYt) ?: return
+        val spinnerLang = findViewById<Spinner>(R.id.spinnerYtSourceLang) ?: return
+        val btnToggleLive = findViewById<Button>(R.id.buttonToggleYtLiveTranslate) ?: return
+        val statusText = findViewById<TextView>(R.id.textYtTranslateLiveStatus) ?: return
+
+        val live = YouTubeTranslatorService.isRunning
+        val subtitleOn = TranslatorPrefs.isSubtitleEnabled(this)
+        val hasKey = TranslatorPrefs.hasGeminiApiKey(this)
+        val currentLang = TranslatorPrefs.getFreeSourceLang(this)
+        val langIdx = freeSourceLangs.indexOfFirst { it.first == currentLang }.coerceAtLeast(0)
+        val ttsVol = TranslatorPrefs.getTtsVolumePercent(this)
+        val ttsSpeed = TranslatorPrefs.getTtsSpeed(this)
+
+        syncingTranslatorUi = true
+        try {
+            checkSubtitles.isChecked = subtitleOn
+            checkVoice.isChecked = TranslatorPrefs.isVoiceTtsEnabled(this)
+            checkAudioTrack?.isChecked = TranslatorPrefs.isAudioTrackModeEnabled(this)
+            checkMuteOrig?.isChecked = TranslatorPrefs.isAudioTrackMuteOrigEnabled(this)
+            textTtsVolume?.text = "Khmer Voice Volume: $ttsVol%"
+            if (seekTtsVolume != null && seekTtsVolume.progress != ttsVol - 10) {
+                seekTtsVolume.progress = (ttsVol - 10).coerceIn(0, 90)
+            }
+            textTtsSpeed?.text = String.format(Locale.US, "Khmer Voice Speed: %.2fx", ttsSpeed)
+            val speedProgress = ((ttsSpeed - 1.0f) / 0.05f).toInt().coerceIn(0, 24)
+            if (seekTtsSpeed != null && seekTtsSpeed.progress != speedProgress) {
+                seekTtsSpeed.progress = speedProgress
+            }
+            val targetGenderBtn = when (TranslatorPrefs.getVoiceGenderMode(this)) {
+                TranslatorPrefs.GENDER_MODE_FEMALE -> R.id.radioVoiceFemale
+                TranslatorPrefs.GENDER_MODE_MALE -> R.id.radioVoiceMale
+                else -> R.id.radioVoiceAuto
+            }
+            if (radioVoiceGender != null && radioVoiceGender.checkedRadioButtonId != targetGenderBtn) {
+                radioVoiceGender.check(targetGenderBtn)
+            }
+            val targetToneBtn = when (TranslatorPrefs.getVoiceToneMode(this)) {
+                TranslatorPrefs.TONE_MODE_WARM -> R.id.radioToneWarm
+                TranslatorPrefs.TONE_MODE_LIVELY -> R.id.radioToneLively
+                TranslatorPrefs.TONE_MODE_FLAT -> R.id.radioToneFlat
+                else -> R.id.radioToneNatural
+            }
+            if (radioVoiceTone != null && radioVoiceTone.checkedRadioButtonId != targetToneBtn) {
+                radioVoiceTone.check(targetToneBtn)
+            }
+            checkShowOriginal.isChecked = TranslatorPrefs.isShowOriginalEnabled(this)
+            checkOnlyYt.isChecked = TranslatorPrefs.isOnlyYouTube(this)
+            if (spinnerLang.selectedItemPosition != langIdx) {
+                spinnerLang.setSelection(langIdx, false)
+            }
+        } finally {
+            syncingTranslatorUi = false
+        }
+
+        when {
+            live -> {
+                badge.text = getString(R.string.yt_translate_badge_live)
+                badge.setTextColor(Color.parseColor("#10B981"))
+            }
+            subtitleOn -> {
+                badge.text = getString(R.string.yt_translate_badge_caption)
+                badge.setTextColor(Color.parseColor("#00D2FF"))
+            }
+            else -> {
+                badge.text = getString(R.string.yt_translate_badge_off)
+                badge.setTextColor(Color.parseColor("#94A3B8"))
+            }
+        }
+
+        btnToggleLive.text = if (live) {
+            getString(R.string.yt_translate_stop_btn)
+        } else {
+            getString(R.string.yt_translate_start_btn)
+        }
+
+        statusText.text = when {
+            live && hasKey && YouTubeTranslatorService.shouldUseFreeFallback(this) ->
+                "🟡 Gemini quota limit -> Hybrid Live Free Speech + CC → Khmer (auto-resumes AI)"
+            live && hasKey ->
+                "🟢 Streaming real-time audio → Multi-Model Gemini SSE + Auto Hybrid → Khmer"
+            live ->
+                "🟡 Streaming live YouTube audio ($currentLang) + YouTube CC/Live Caption → Khmer"
+            hasKey && subtitleOn ->
+                "🔵 Gemini SSE key ready + Real-Time Caption mode active. Tap Start Live Voice Translate."
+            hasKey ->
+                "✨ Gemini SSE key saved. Tap Start Live Voice Translate for real-time audio AI."
+            subtitleOn ->
+                "🔵 Real-Time Caption Mode active (turn on CC or Live Caption in YouTube), or tap Start Live."
+            else ->
+                getString(R.string.yt_translate_hint_no_key)
+        }
+    }
+
     override fun onPause() {
         // Back in TikTok (or anywhere else): remote presses act again.
         KeyLog.testing = false
         KeyLog.listener = null
+        GestureAccessibilityService.instance?.onYouTubeSkipCountChanged = null
+        YouTubeTranslatorService.onStateChanged = null
         super.onPause()
     }
 
@@ -685,6 +1110,17 @@ class MainActivity : AppCompatActivity() {
         refreshSleepTimer()
         refreshRemotes()
         refreshAutomatic()
+        refreshYouTubeAutoSkip()
+        refreshYouTubeTranslator()
+        YouTubeTranslatorService.onStateChanged = {
+            runOnUiThread { refreshYouTubeTranslator() }
+        }
+        GestureAccessibilityService.instance?.onYouTubeSkipCountChanged = { count ->
+            runOnUiThread {
+                findViewById<TextView>(R.id.textYtSkippedBadge)?.text =
+                    getString(R.string.yt_auto_skip_badge, count)
+            }
+        }
         // Remote test: while this screen is open, presses are only logged.
         KeyLog.testing = true
         KeyLog.listener = { showKeyLog() }

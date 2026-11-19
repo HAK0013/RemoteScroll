@@ -5,6 +5,13 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- Required on Android 14+ for foregroundServiceType="mediaPlayback" -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Required on Android 14+ for foregroundServiceType="mediaProjection" (YT audio capture) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- Required by AudioPlaybackCapture / SpeechRecognizer -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Required for real-time voice/caption translation requests -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Runtime permission on Android 13+ for the persistent notification -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Lists paired Bluetooth devices so the user can choose which remotes control TikTok -->
@@ -28,6 +35,14 @@
         <package android:name="com.ss.android.ugc.aweme" />
         <package android:name="com.google.android.youtube" />
         <package android:name="com.instagram.android" />
+        <package android:name="com.google.android.tts" />
+        <package android:name="com.google.android.as" />
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
     </queries>
 
     <application
@@ -53,6 +68,20 @@
             android:name=".RemoteMediaService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
+
+        <!-- Captures YouTube internal audio and translates speech to Khmer in real time -->
+        <service
+            android:name=".YouTubeTranslatorService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <!-- Translucent helper activity to obtain RECORD_AUDIO + MediaProjection consent -->
+        <activity
+            android:name=".MediaProjectionPromptActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@style/Theme.AppCompat.Dialog" />
 
         <!-- Performs the swipes/taps with dispatchGesture() -->
         <service

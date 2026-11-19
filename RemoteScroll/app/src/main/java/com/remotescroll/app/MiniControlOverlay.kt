@@ -51,6 +51,11 @@ class MiniControlOverlay(private val service: GestureAccessibilityService) {
     private var textBubbleStatus: TextView? = null
     private var btnAutoLock: TextView? = null
     private var btnAutoPilot: TextView? = null
+    private var btnYtSkipAds: TextView? = null
+    private var btnYtMuteAds: TextView? = null
+    private var textYtSkipCounter: TextView? = null
+    private var btnYtTranslate: TextView? = null
+    private var btnYtTranslateVoice: TextView? = null
 
     private var isExpanded = false
     private var lastX = DEFAULT_X
@@ -91,12 +96,22 @@ class MiniControlOverlay(private val service: GestureAccessibilityService) {
         val minimizeBtn = view.findViewById<View>(R.id.btnMinimize)
         val closeBtn = view.findViewById<View>(R.id.btnClose)
         val dragHandle = view.findViewById<View>(R.id.dragHandle)
+        val ytSkipBtn = view.findViewById<TextView>(R.id.btnYtSkipAds)
+        val ytMuteBtn = view.findViewById<TextView>(R.id.btnYtMuteAds)
+        val ytCounterText = view.findViewById<TextView>(R.id.textYtSkipCounter)
+        val ytTranslateBtn = view.findViewById<TextView>(R.id.btnYtTranslate)
+        val ytTranslateVoiceBtn = view.findViewById<TextView>(R.id.btnYtTranslateVoice)
 
         layoutCollapsed = collapsed
         layoutExpanded = expanded
         textBubbleStatus = bubbleStatus
         btnAutoPilot = autoPilotBtn
         btnAutoLock = autoBtn
+        btnYtSkipAds = ytSkipBtn
+        btnYtMuteAds = ytMuteBtn
+        textYtSkipCounter = ytCounterText
+        btnYtTranslate = ytTranslateBtn
+        btnYtTranslateVoice = ytTranslateVoiceBtn
 
         // Buttons
         autoPilotBtn?.setOnClickListener {
@@ -162,6 +177,68 @@ class MiniControlOverlay(private val service: GestureAccessibilityService) {
             setExpanded(false)
         }
 
+        ytSkipBtn?.setOnClickListener {
+            val next = !YouTubeAdSkipper.isEnabled(service)
+            YouTubeAdSkipper.setEnabled(service, next)
+            if (next) {
+                service.scheduleAutoSkipCheck(200L, force = true)
+            } else {
+                service.restoreYouTubeAdMute()
+            }
+            updateYouTubeAdSkipStatus()
+            Toast.makeText(
+                service,
+                if (next) "⏭️ YouTube Auto-Skip Ads: ON" else "⏭️ YouTube Auto-Skip Ads: OFF",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
+        ytMuteBtn?.setOnClickListener {
+            val next = !YouTubeAdSkipper.isMuteAdsEnabled(service)
+            YouTubeAdSkipper.setMuteAdsEnabled(service, next)
+            if (!next) {
+                service.restoreYouTubeAdMute()
+            } else if (YouTubeAdSkipper.isEnabled(service)) {
+                service.scheduleAutoSkipCheck(200L, force = true)
+            }
+            updateYouTubeAdSkipStatus()
+            Toast.makeText(
+                service,
+                if (next) "🔇 Mute YouTube Ads: ON" else "🔊 Mute YouTube Ads: OFF",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
+        ytTranslateBtn?.setOnClickListener {
+            val active = YouTubeTranslatorService.isRunning || TranslatorPrefs.isSubtitleEnabled(service)
+            if (active) {
+                YouTubeTranslatorService.stop(service)
+                TranslatorPrefs.setSubtitleEnabled(service, false)
+                service.updateKhmerSubtitleOverlay()
+                updateYouTubeAdSkipStatus()
+                Toast.makeText(service, "🇰🇭 YT Translate: OFF", Toast.LENGTH_SHORT).show()
+            } else {
+                TranslatorPrefs.setSubtitleEnabled(service, true)
+                service.updateKhmerSubtitleOverlay()
+                MediaProjectionPromptActivity.launch(service, openYouTubeAfterConsent = false)
+                updateYouTubeAdSkipStatus()
+            }
+        }
+
+        ytTranslateVoiceBtn?.setOnClickListener {
+            val next = !TranslatorPrefs.isVoiceTtsEnabled(service)
+            TranslatorPrefs.setVoiceTtsEnabled(service, next)
+            if (!next) {
+                service.stopKhmerVoice()
+            }
+            updateYouTubeAdSkipStatus()
+            Toast.makeText(
+                service,
+                if (next) "🔊 Khmer Voice: ON" else "🔇 Khmer Voice: OFF",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+
         // Draggers
         attachDragger(collapsed) {
             setExpanded(true)
@@ -193,6 +270,7 @@ class MiniControlOverlay(private val service: GestureAccessibilityService) {
 
         setExpanded(isExpanded)
         updateStatus(service.scrollCount, GestureAccessibilityService.autoLockScrolls(service))
+        updateYouTubeAdSkipStatus()
         Log.i(TAG, "Mini control overlay shown")
     }
 
@@ -209,11 +287,65 @@ class MiniControlOverlay(private val service: GestureAccessibilityService) {
         layoutExpanded = null
         textBubbleStatus = null
         btnAutoLock = null
+        btnAutoPilot = null
+        btnYtSkipAds = null
+        btnYtMuteAds = null
+        textYtSkipCounter = null
+        btnYtTranslate = null
+        btnYtTranslateVoice = null
         Log.i(TAG, "Mini control overlay hidden")
     }
 
     fun destroy() {
         hide()
+    }
+
+    fun updateYouTubeAdSkipStatus() {
+        handler.post {
+            val ytSkip = YouTubeAdSkipper.isEnabled(service)
+            val ytMute = YouTubeAdSkipper.isMuteAdsEnabled(service)
+            val count = YouTubeAdSkipper.skippedCount(service)
+            val liveCapture = YouTubeTranslatorService.isRunning
+            val subtitleOn = TranslatorPrefs.isSubtitleEnabled(service)
+            val voiceOn = TranslatorPrefs.isVoiceTtsEnabled(service)
+
+            btnYtSkipAds?.apply {
+                text = if (ytSkip) "⏭️ YT Ads: ON" else "⏭️ YT Ads: OFF"
+                setTextColor(
+                    android.graphics.Color.parseColor(if (ytSkip) "#00D2FF" else "#94A3B8")
+                )
+            }
+            btnYtMuteAds?.apply {
+                text = if (ytMute) "🔇 Mute: ON" else "🔇 Mute: OFF"
+                setTextColor(
+                    android.graphics.Color.parseColor(if (ytMute) "#00D2FF" else "#94A3B8")
+                )
+            }
+            textYtSkipCounter?.text = "$count ads"
+
+            btnYtTranslate?.apply {
+                text = when {
+                    liveCapture -> "🇰🇭 Translate: LIVE"
+                    subtitleOn -> "🇰🇭 Caption: ON"
+                    else -> "🇰🇭 Translate: OFF"
+                }
+                setTextColor(
+                    android.graphics.Color.parseColor(
+                        when {
+                            liveCapture -> "#10B981"
+                            subtitleOn -> "#00D2FF"
+                            else -> "#94A3B8"
+                        }
+                    )
+                )
+            }
+            btnYtTranslateVoice?.apply {
+                text = if (voiceOn) "🔊 Voice" else "🔇 Voice"
+                setTextColor(
+                    android.graphics.Color.parseColor(if (voiceOn) "#00D2FF" else "#94A3B8")
+                )
+            }
+        }
     }
 
     fun updateAutoPilot(remainingSeconds: Int, totalSeconds: Int, isPaused: Boolean) {

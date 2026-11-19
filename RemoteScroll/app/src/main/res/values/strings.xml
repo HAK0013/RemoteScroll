@@ -2,7 +2,7 @@
 <resources>
     <string name="app_name">RemoteScroll</string>
     <string name="accessibility_label">RemoteScroll gestures</string>
-    <string name="accessibility_description">Lets RemoteScroll perform swipes and taps on the screen when you press buttons on your Bluetooth media remote, so you can scroll TikTok without touching the screen. RemoteScroll only reacts to the Next, Previous and Play/Pause keys. It reads the screen only when you ask it to save a video, to find the TikTok Save button, and never stores or sends anything.</string>
+    <string name="accessibility_description">Lets RemoteScroll perform swipes and taps on the screen when you press buttons on your Bluetooth media remote, so you can scroll videos without touching the screen, find TikTok\'s Save button, and automatically click Skip Ad on YouTube ads. It never stores or sends anything.</string>
 
     <string name="instructions">1. Enable the accessibility service.\n2. Start the remote service.\n3. Open TikTok, YouTube Shorts or Instagram Reels and use your Bluetooth remote:\n\n• Next: next video (swipe up)\n• Previous: previous video (swipe down)\n• Hold Next: volume up\n• Hold Previous: volume down\n• Play/Pause: pause/resume\n• Hold Play/Pause: 1 beep = like, 2 beeps = pocket lock on/off, 3 beeps = save. Let go after the beeps you want.\n• Or, in Press count style: 2 presses = like, 3 = pocket lock, 4 = save, hold = pocket lock (or like or save, your choice).\n\nPocket lock: the screen goes black and ignores touches, but TikTok keeps playing and your remote keeps working. Put the phone in your pocket or face down. To unlock, hold a finger on the screen for 2 seconds, or use the pocket lock action on the remote (2 beeps).\n\nDo not press the power button: a real lock pauses TikTok and Android blocks remote control behind the lock screen.</string>
 
@@ -31,9 +31,11 @@
     <string name="app_youtube">YouTube Shorts</string>
     <string name="app_instagram">Instagram Reels</string>
     <string name="app_note_tiktok">Everything works: scroll, pause, like, save, pocket lock.</string>
-    <string name="app_note_youtube">Scroll, pause, like and pocket lock work. Save only works if a Save button is on screen.</string>
+    <string name="app_note_youtube">Scroll, pause, like and pocket lock work. Save only works if a Save button is on screen. YouTube Auto-Skip Ads works on both regular YouTube videos and Shorts.</string>
     <string name="app_note_instagram">Scroll, like and pocket lock work. A tap mutes or unmutes in Reels instead of pausing. Save only works if a Save button is on screen.</string>
     <string name="auto_title">Automatic</string>
+    <string name="auto_start_open_label">Start the remote automatically when TikTok opens</string>
+    <string name="auto_start_open_help">No need to press Start: opening TikTok (or YouTube / Instagram) turns the remote on. If you press Stop, it stays off until you start it again or restart the phone.</string>
     <string name="auto_start_label">Start when a chosen remote connects</string>
     <string name="auto_start_help_ok">When %1$s connects over Bluetooth, the remote service starts and the video app opens. When it disconnects, the remote stops and pocket lock goes off.</string>
     <string name="auto_start_help_none">Choose your remote under Remotes first. Auto-start only reacts to the remotes you chose.</string>
@@ -109,8 +111,24 @@
     <string name="auto_lock_toast_off">Auto-lock turned off</string>
 
     <!-- Auto-Skip Ads & LIVEs -->
-    <string name="auto_skip_ads_label">Auto-skip sponsored ads &amp; LIVE streams</string>
-    <string name="auto_skip_ads_help">Scans video tags and automatically swipes past ads, promotions, and LIVE broadcasts in under 0.5s.</string>
+    <string name="auto_skip_ads_label">Auto-skip feed ads &amp; LIVE streams (TikTok / Reels / Shorts)</string>
+    <string name="auto_skip_ads_help">Scans short-video feed tags and automatically swipes past sponsored ads, promotions, and LIVE broadcasts in under 0.5s.</string>
+
+    <!-- YouTube Auto-Skip Ads -->
+    <string name="yt_auto_skip_title">YOUTUBE AUTO-SKIP ADS</string>
+    <string name="yt_auto_skip_badge">%1$d SKIPPED</string>
+    <string name="yt_auto_skip_desc">Automatically skips YouTube video ads as soon as the countdown finishes, closes in-player ad banners, and swipes past YouTube Shorts ads — even under Pocket Lock or Sleep Blackout Mode.</string>
+    <string name="yt_auto_skip_label">Auto-skip YouTube video ads</string>
+    <string name="yt_auto_skip_help">Clicks Skip / Skip Ad automatically across portrait, fullscreen, and Shorts without touching your phone.</string>
+    <string name="yt_mute_ads_label">Mute audio during YouTube ad countdown</string>
+    <string name="fb_auto_skip_label">Also skip Facebook ads</string>
+    <string name="fb_auto_skip_help">Clicks Skip ad in Facebook videos and swipes past Sponsored reels. Sponsored posts in the News Feed are left alone.</string>
+    <string name="fb_auto_skip_toast">⏭️ Skipped Facebook ad (#%1$d)</string>
+    <string name="yt_mute_ads_help">Silences media volume while waiting out the 5s skip countdown or unskippable ads, then restores your volume automatically.</string>
+    <string name="yt_open_regular_btn">▶  Open YouTube (Videos &amp; Podcasts)</string>
+    <string name="yt_reset_count_btn">Reset</string>
+    <string name="yt_auto_skip_toast">⏭️ Skipped YouTube ad (#%1$d)</string>
+    <string name="yt_missing">YouTube is not installed</string>
 
     <!-- 2x Turbo Speed -->
     <string name="turbo_speed_label">Turbo 2x speed</string>
@@ -159,4 +177,33 @@
     <string name="auto_pilot_reset_label">Reset countdown on manual scroll</string>
     <string name="auto_pilot_reset_help">Restarts the timer whenever you manually swipe or press Next/Back on your remote so new videos aren\'t cut short.</string>
     <string name="auto_pilot_btn_launch">▶  Start Auto-Pilot &amp; Open %1$s</string>
+
+    <string name="yt_translate_title">YOUTUBE VOICE TRANSLATOR</string>
+    <string name="yt_translate_badge_off">OFF</string>
+    <string name="yt_translate_badge_live">LIVE AUDIO</string>
+    <string name="yt_translate_badge_caption">CAPTION MODE</string>
+    <string name="yt_translate_subtitle_label">Show Floating Khmer Subtitles</string>
+    <string name="yt_translate_subtitle_help">Displays a draggable Khmer subtitle overlay on top of YouTube (works with Live Audio Capture, YouTube CC, or Live Caption).</string>
+    <string name="yt_translate_voice_label">Speak Khmer Voice Dubbing (TTS)</string>
+    <string name="yt_translate_voice_help">Reads translated Khmer sentences aloud automatically using Khmer TTS while gently ducking video volume.</string>
+    <string name="yt_translate_show_orig_label">Show Original Spoken Text</string>
+    <string name="yt_translate_show_orig_help">Displays the heard source text above the Khmer translation so you can follow along.</string>
+    <string name="yt_translate_only_yt_label">Only Active Inside YouTube / Revanced</string>
+    <string name="yt_translate_only_yt_help">Automatically pauses subtitle overlay when you leave YouTube or RemoteScroll.</string>
+    <string name="yt_translate_gemini_hint">Optional Gemini API key (ALL languages direct audio → Khmer)</string>
+    <string name="yt_translate_save_key_btn">Save Key</string>
+    <string name="yt_translate_lang_label">Free Voice Language (used if no Gemini key):</string>
+    <string name="yt_translate_start_btn">🇰🇭 Start Live Voice Translate &amp; Open YouTube</string>
+    <string name="yt_translate_stop_btn">⏹ Stop Live Voice Capture</string>
+    <string name="yt_translate_hint_no_key">Zero-key mode: Live audio listens in selected language AND auto-translates ALL languages whenever YouTube CC or Android Live Caption is on. Add a Gemini key for zero-caption ALL-languages AI audio.</string>
+    <string name="yt_translate_key_saved">Gemini API key saved locally (All-Languages AI audio active).</string>
+    <string name="yt_translate_key_cleared">Gemini API key cleared (Free Speech + CC/Live Caption mode).</string>
+    <string name="yt_translate_waiting">កំពុងស្តាប់សំឡេងវីដេអូ… (Listening for YouTube voice…)</string>
+    <string name="yt_translate_audio_denied">Microphone/audio permission is required for live voice capture.</string>
+    <string name="yt_translate_capture_cancelled">Live YouTube audio capture cancelled.</string>
+    <string name="yt_translate_android10_required">Android 10+ is required for live internal YouTube audio capture.</string>
+    <string name="yt_translate_notif_channel">YouTube Khmer Voice Translator</string>
+    <string name="yt_translate_notif_title">RemoteScroll Live Translator</string>
+    <string name="yt_translate_notif_text">Listening to YouTube voice → Khmer</string>
+    <string name="yt_translate_notif_stop">Stop</string>
 </resources>
